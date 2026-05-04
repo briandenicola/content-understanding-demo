@@ -21,8 +21,9 @@ public class DocumentAgentService
 
     public async Task<DocumentAnalysisResult> ProcessDocumentAsync(string fileName, byte[] fileContent)
     {
-        var endpoint = _configuration["Azure:FoundryProjectEndpoint"]
-            ?? throw new InvalidOperationException("Azure:FoundryProjectEndpoint is not configured");
+        var endpoint = _configuration["Azure:FoundryProjectEndpoint"];
+        if (string.IsNullOrWhiteSpace(endpoint))
+            throw new InvalidOperationException("Azure:FoundryProjectEndpoint is not configured. Run 'task up' to deploy infrastructure.");
         var modelDeployment = _configuration["Azure:ModelDeploymentName"] ?? "gpt-4o";
 
         var projectClient = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential());

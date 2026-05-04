@@ -5,7 +5,7 @@ output "project_id" {
 
 output "project_endpoint" {
   description = "Foundry Project endpoint"
-  value       = azapi_resource.ai_foundry_project.output.properties.endpoints
+  value       = azapi_resource.ai_foundry_project.output.properties.endpoints["AI Foundry API"]
 }
 
 output "project_principal_id" {
