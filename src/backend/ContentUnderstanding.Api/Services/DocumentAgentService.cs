@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Azure.AI.Projects;
 using Azure.Identity;
 using ContentUnderstanding.Api.Models;
@@ -10,21 +11,34 @@ namespace ContentUnderstanding.Api.Services;
 /// </summary>
 public class DocumentAgentService
 {
+    private static readonly ActivitySource Activity = new("ContentUnderstanding.Api", "1.0.0");
     private readonly IConfiguration _configuration;
     private readonly ContentUnderstandingService _cusService;
+    private readonly ILogger<DocumentAgentService> _logger;
 
-    public DocumentAgentService(IConfiguration configuration, ContentUnderstandingService cusService)
+    public DocumentAgentService(IConfiguration configuration, ContentUnderstandingService cusService, ILogger<DocumentAgentService> logger)
     {
         _configuration = configuration;
         _cusService = cusService;
+        _logger = logger;
     }
 
     public async Task<DocumentAnalysisResult> ProcessDocumentAsync(string fileName, byte[] fileContent)
     {
+        using var span = Activity.StartActivity("ProcessDocumentWithAgent");
+        span?.SetTag("document.file_name", fileName);
+        span?.SetTag("document.size_bytes", fileContent.Length);
+
+        _logger.LogInformation("Processing document with agent: {FileName} ({Size} bytes)", fileName, fileContent.Length);
+
         var endpoint = _configuration["Azure:FoundryProjectEndpoint"];
         if (string.IsNullOrWhiteSpace(endpoint))
             throw new InvalidOperationException("Azure:FoundryProjectEndpoint is not configured. Run 'task up' to deploy infrastructure.");
-        var modelDeployment = _configuration["Azure:ModelDeploymentName"] ?? "gpt-4o";
+
+        var modelDeployment = _configuration["Azure:ModelDeploymentName"] ?? "gpt-5.4";
+        _logger.LogDebug("Using model deployment: {Model} at endpoint: {Endpoint}", modelDeployment, endpoint);
+        span?.SetTag("ai.model", modelDeployment);
+        span?.SetTag("ai.endpoint", endpoint);
 
         var projectClient = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential());
 
@@ -55,12 +69,18 @@ public class DocumentAgentService
         // For the demo, we simulate the CUS analysis inline
         // In production, you'd upload to blob and call CUS first
         var simulatedResult = CreateSimulatedResult(fileName);
+        _logger.LogDebug("Simulated CUS extraction: {FieldCount} fields for {DocType}",
+            simulatedResult.Fields.Count, simulatedResult.DocumentType);
 
         var fieldsDescription = string.Join("\n", simulatedResult.Fields.Select(f =>
             $"- {f.Name}: \"{f.Value}\" (confidence: {f.Confidence:P0})"));
 
+        _logger.LogDebug("Sending to agent for review...");
         var agentResponse = await agent.RunAsync(
             $"Review this document extraction for account opening eligibility:\n\nDocument: {fileName}\nType: {simulatedResult.DocumentType}\n\nExtracted fields:\n{fieldsDescription}");
+
+        _logger.LogInformation("Agent response received ({Length} chars)", agentResponse?.ToString()?.Length ?? 0);
+        _logger.LogDebug("Agent response: {Response}", agentResponse);
 
         return simulatedResult with
         {

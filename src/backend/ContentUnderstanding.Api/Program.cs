@@ -1,9 +1,74 @@
+using System.Diagnostics;
 using Azure.Identity;
 using Azure.Storage.Blobs;
 using ContentUnderstanding.Api.Agents;
 using ContentUnderstanding.Api.Services;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
+
+const string serviceName = "ContentUnderstanding.Api";
+const string serviceVersion = "1.0.0";
+
+// Configure logging with OTEL + console
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddOpenTelemetry(options =>
+{
+    options.SetResourceBuilder(ResourceBuilder.CreateDefault()
+        .AddService(serviceName, serviceVersion: serviceVersion));
+    options.AddConsoleExporter();
+    options.IncludeFormattedMessage = true;
+    options.IncludeScopes = true;
+});
+
+if (builder.Environment.IsDevelopment())
+{
+    builder.Logging.SetMinimumLevel(LogLevel.Debug);
+    builder.Logging.AddFilter("ContentUnderstanding", LogLevel.Trace);
+    builder.Logging.AddFilter("Microsoft.AspNetCore.Routing", LogLevel.Debug);
+    builder.Logging.AddFilter("System.Net.Http", LogLevel.Debug);
+}
+
+// OpenTelemetry tracing & metrics
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource
+        .AddService(serviceName, serviceVersion: serviceVersion)
+        .AddAttributes(new Dictionary<string, object>
+        {
+            ["deployment.environment"] = builder.Environment.EnvironmentName
+        }))
+    .WithTracing(tracing =>
+    {
+        tracing
+            .AddAspNetCoreInstrumentation(opts =>
+            {
+                opts.RecordException = true;
+            })
+            .AddHttpClientInstrumentation()
+            .AddSource(serviceName)
+            .AddConsoleExporter();
+    })
+    .WithMetrics(metrics =>
+    {
+        metrics
+            .AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation()
+            .AddMeter(serviceName)
+            .AddConsoleExporter();
+    });
+
+// Azure Monitor (App Insights) if connection string is available
+var appInsightsConn = builder.Configuration["Azure:ApplicationInsightsConnectionString"];
+if (!string.IsNullOrEmpty(appInsightsConn))
+    builder.Services.AddOpenTelemetry().UseAzureMonitor(o => o.ConnectionString = appInsightsConn);
+
+// Application activity source for custom spans
+builder.Services.AddSingleton(new ActivitySource(serviceName, serviceVersion));
 
 builder.Services.AddOpenApi();
 builder.Services.AddCors(options =>
