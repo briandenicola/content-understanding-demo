@@ -13,8 +13,8 @@ resource "azapi_resource" "model_deployments" {
       }
     }
     sku = {
-      name     = "GlobalStandard"
-      capacity = 250
+      name     = var.foundry_project.models[count.index].sku
+      capacity = var.foundry_project.models[count.index].capacity
     }
   }
 }

@@ -33,22 +33,23 @@ public class DocumentAgentService
 
         _logger.LogInformation("Processing document with agent: {FileName} ({Size} bytes)", fileName, fileContent.Length);
 
-        // AIProjectClient needs the Foundry services endpoint (services.ai.azure.com)
-        // Model deployments are registered here, not at cognitiveservices.azure.com
+        // AIProjectClient needs the OpenAI endpoint for model completions
+        // The Agent Framework uses the OpenAI Responses API internally
         var endpoint = _configuration["Azure:FoundryProjectEndpoint"];
         if (string.IsNullOrWhiteSpace(endpoint))
             throw new InvalidOperationException("Azure:FoundryProjectEndpoint is not configured. Run 'task up' to deploy infrastructure.");
 
-        // Extract base Foundry URL (strip /api/projects/... path if present)
+        // Extract the OpenAI endpoint from the Foundry services URL
+        // Format: https://<name>.openai.azure.com/
         var endpointUri = new Uri(endpoint);
-        var foundryBase = new Uri($"{endpointUri.Scheme}://{endpointUri.Host}/");
+        var openAiEndpoint = new Uri($"https://{endpointUri.Host.Replace(".services.ai.azure.com", ".openai.azure.com")}/");
 
         var modelDeployment = _configuration["Azure:ModelDeploymentName"] ?? "gpt-5.4";
-        _logger.LogDebug("Using model deployment: {Model} at endpoint: {Endpoint}", modelDeployment, foundryBase);
+        _logger.LogDebug("Using model deployment: {Model} at endpoint: {Endpoint}", modelDeployment, openAiEndpoint);
         span?.SetTag("ai.model", modelDeployment);
-        span?.SetTag("ai.endpoint", foundryBase.ToString());
+        span?.SetTag("ai.endpoint", openAiEndpoint.ToString());
 
-        var projectClient = new AIProjectClient(foundryBase, _credential);
+        var projectClient = new AIProjectClient(openAiEndpoint, _credential);
 
         var agent = projectClient.AsAIAgent(
             model: modelDeployment,
@@ -76,49 +77,28 @@ public class DocumentAgentService
                 - "flags": array of any concerns (expired docs, low confidence, etc.)
                 """);
 
-        // For now, create a simulated CUS result (until blob upload pipeline is wired)
-        var simulatedResult = CreateSimulatedResult(fileName);
-        _logger.LogDebug("Simulated CUS extraction: {FieldCount} fields for {DocType}",
-            simulatedResult.Fields.Count, simulatedResult.DocumentType);
+        // Run CUS analysis first (binary upload, no blob storage needed)
+        _logger.LogDebug("Running CUS binary analysis...");
+        var cusResult = await _cusService.AnalyzeBinaryAsync(fileName, fileContent);
+        _logger.LogDebug("CUS extraction: {FieldCount} fields for {DocType}",
+            cusResult.Fields.Count, cusResult.DocumentType);
 
-        var fieldsDescription = string.Join("\n", simulatedResult.Fields.Select(f =>
-            $"- {f.Name}: \"{f.Value}\" (confidence: {f.Confidence:P0})"));
+        var fieldsDescription = cusResult.Fields.Count > 0
+            ? string.Join("\n", cusResult.Fields.Select(f =>
+                $"- {f.Name}: \"{f.Value}\" (confidence: {f.Confidence:P0})"))
+            : $"No structured fields extracted. Document content:\n{cusResult.Markdown?[..Math.Min(cusResult.Markdown.Length, 2000)]}";
 
         _logger.LogDebug("Sending to agent for review...");
         var agentResponse = await agent.RunAsync(
-            $"Review this document extraction for account opening eligibility:\n\nDocument: {fileName}\nType: {simulatedResult.DocumentType}\n\nExtracted fields:\n{fieldsDescription}");
+            $"Review this document extraction for account opening eligibility:\n\nDocument: {fileName}\nType: {cusResult.DocumentType}\n\nExtracted fields:\n{fieldsDescription}");
 
         _logger.LogInformation("Agent response received ({Length} chars)", agentResponse?.ToString()?.Length ?? 0);
         _logger.LogDebug("Agent response: {Response}", agentResponse);
 
-        return simulatedResult with
+        return cusResult with
         {
             AgentSummary = agentResponse?.ToString()
         };
     }
 
-    private static DocumentAnalysisResult CreateSimulatedResult(string fileName)
-    {
-        return new DocumentAnalysisResult
-        {
-            DocumentId = Guid.NewGuid().ToString(),
-            DocumentType = "Identity Document",
-            FileName = fileName,
-            AnalyzedAt = DateTime.UtcNow,
-            OverallConfidence = 0.94,
-            Fields =
-            [
-                new() { Name = "FirstName", Value = "John", Confidence = 0.98, Category = "Personal Information" },
-                new() { Name = "LastName", Value = "Smith", Confidence = 0.97, Category = "Personal Information" },
-                new() { Name = "DateOfBirth", Value = "1985-03-15", Confidence = 0.95, Category = "Personal Information" },
-                new() { Name = "Address", Value = "123 Main Street", Confidence = 0.92, Category = "Address" },
-                new() { Name = "City", Value = "Seattle", Confidence = 0.96, Category = "Address" },
-                new() { Name = "State", Value = "WA", Confidence = 0.98, Category = "Address" },
-                new() { Name = "ZipCode", Value = "98101", Confidence = 0.94, Category = "Address" },
-                new() { Name = "DocumentNumber", Value = "DL-987654321", Confidence = 0.91, Category = "Document ID" },
-                new() { Name = "ExpirationDate", Value = "2028-06-30", Confidence = 0.89, Category = "Dates" },
-                new() { Name = "IssueDate", Value = "2020-06-30", Confidence = 0.88, Category = "Dates" },
-            ]
-        };
-    }
 }

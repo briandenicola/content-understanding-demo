@@ -12,9 +12,11 @@ variable "foundry_project" {
       workspace_id = string
     })
     models = list(object({
-      name    = string
-      version = string
-      format  = string
+      name     = string
+      version  = string
+      format   = string
+      sku      = optional(string, "GlobalStandard")
+      capacity = optional(number, 250)
     }))
   })
 }

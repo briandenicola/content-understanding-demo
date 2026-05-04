@@ -18,10 +18,53 @@ public class ContentUnderstandingService
 
     public ContentUnderstandingService(IConfiguration configuration, ILogger<ContentUnderstandingService> logger, TokenCredential credential)
     {
+        // CUS SDK requires the Foundry services endpoint (services.ai.azure.com)
         var endpoint = configuration["Azure:ContentUnderstandingEndpoint"]
             ?? throw new InvalidOperationException("Azure:ContentUnderstandingEndpoint is not configured");
+
+        // Convert cognitiveservices.azure.com to services.ai.azure.com if needed
+        var uri = new Uri(endpoint);
+        if (uri.Host.Contains("cognitiveservices.azure.com"))
+        {
+            var servicesHost = uri.Host.Replace(".cognitiveservices.azure.com", ".services.ai.azure.com");
+            endpoint = $"https://{servicesHost}/";
+        }
+
         _client = new ContentUnderstandingClient(new Uri(endpoint), credential);
         _logger = logger;
+        _logger.LogDebug("ContentUnderstandingClient initialized with endpoint: {Endpoint}", endpoint);
+    }
+
+    /// <summary>
+    /// One-time setup: configure default model deployment mappings for CUS prebuilt analyzers.
+    /// </summary>
+    public async Task ConfigureDefaultsAsync()
+    {
+        _logger.LogInformation("Configuring CUS default model deployments...");
+        try
+        {
+            var modelDeployments = new Dictionary<string, string>
+            {
+                ["gpt-4.1"] = "gpt-4.1",
+                ["gpt-4.1-mini"] = "gpt-4.1-mini",
+                ["text-embedding-3-large"] = "text-embedding-3-large"
+            };
+
+            var response = await _client.UpdateDefaultsAsync(modelDeployments);
+            _logger.LogInformation("✅ CUS model defaults configured successfully");
+
+            if (response.Value?.ModelDeployments != null)
+            {
+                foreach (var kvp in response.Value.ModelDeployments)
+                {
+                    _logger.LogDebug("  {Model} → {Deployment}", kvp.Key, kvp.Value);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "⚠️  Failed to configure CUS defaults (may already be configured): {Message}", ex.Message);
+        }
     }
 
     public async Task<DocumentAnalysisResult> AnalyzeDocumentAsync(string blobUrl)
@@ -155,4 +198,71 @@ public class ContentUnderstandingService
         "amount" or "balance" or "income" or "wages" => "Financial",
         _ => "Other"
     };
+
+    /// <summary>
+    /// Analyze a document from binary data (direct upload, no blob storage needed).
+    /// </summary>
+    public async Task<DocumentAnalysisResult> AnalyzeBinaryAsync(string fileName, byte[] fileContent)
+    {
+        using var span = Activity.StartActivity("AnalyzeBinary");
+        span?.SetTag("document.filename", fileName);
+        span?.SetTag("document.size_bytes", fileContent.Length);
+
+        var analyzerName = "prebuilt-documentSearch";
+        _logger.LogInformation("Analyzing binary document with {Analyzer}: {FileName} ({Size} bytes)",
+            analyzerName, fileName, fileContent.Length);
+
+        var binaryData = BinaryData.FromBytes(fileContent);
+        var operation = await _client.AnalyzeBinaryAsync(
+            WaitUntil.Completed,
+            analyzerName,
+            binaryData);
+
+        var result = operation.Value;
+        _logger.LogInformation("Binary analysis complete: {ContentCount} content item(s)", result.Contents?.Count ?? 0);
+
+        var fields = new List<ExtractedField>();
+        var markdownContent = string.Empty;
+
+        if (result.Contents != null)
+        {
+            foreach (var content in result.Contents)
+            {
+                markdownContent += content.Markdown + "\n";
+
+                if (content.Fields != null)
+                {
+                    foreach (var field in content.Fields)
+                    {
+                        var fieldValue = field.Value switch
+                        {
+                            ContentStringField sf => sf.Value ?? "",
+                            ContentNumberField nf => nf.Value?.ToString() ?? "",
+                            ContentDateTimeOffsetField df => df.Value?.ToString("yyyy-MM-dd") ?? "",
+                            _ => field.Value?.ToString() ?? ""
+                        };
+
+                        fields.Add(new ExtractedField
+                        {
+                            Name = field.Key,
+                            Value = fieldValue,
+                            Confidence = field.Value?.Confidence ?? 0.0,
+                            Category = DetermineCategory(field.Key)
+                        });
+                    }
+                }
+            }
+        }
+
+        return new DocumentAnalysisResult
+        {
+            DocumentId = operation.Id ?? Guid.NewGuid().ToString(),
+            DocumentType = DetectDocumentType(markdownContent),
+            FileName = fileName,
+            AnalyzedAt = DateTime.UtcNow,
+            OverallConfidence = fields.Count > 0 ? fields.Average(f => f.Confidence) : 0.95,
+            Markdown = markdownContent,
+            Fields = fields
+        };
+    }
 }

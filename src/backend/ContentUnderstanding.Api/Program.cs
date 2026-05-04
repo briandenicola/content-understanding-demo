@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using Azure.Identity;
-using Azure.Storage.Blobs;
 using ContentUnderstanding.Api.Agents;
 using ContentUnderstanding.Api.Services;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
@@ -79,12 +78,6 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod());
 });
 
-builder.Services.AddSingleton(_ =>
-{
-    var connectionString = builder.Configuration["Azure:StorageConnectionString"];
-    return new BlobServiceClient(connectionString);
-});
-
 builder.Services.AddSingleton<ContentUnderstandingService>();
 builder.Services.AddSingleton<DocumentAgentService>();
 builder.Services.AddSingleton<DocumentProcessingSquad>();
@@ -131,6 +124,13 @@ else
     logger.LogWarning("⚠️  Skipping connectivity check — Foundry endpoint not configured");
 }
 
+// Configure CUS model defaults (one-time setup, idempotent)
+if (!string.IsNullOrEmpty(cusEndpoint))
+{
+    var cusService = app.Services.GetRequiredService<ContentUnderstandingService>();
+    await cusService.ConfigureDefaultsAsync();
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -139,23 +139,19 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseCors();
 
-app.MapPost("/api/documents/upload", async (HttpRequest request, ContentUnderstandingService cus, BlobServiceClient blobClient) =>
+app.MapPost("/api/documents/upload", async (HttpRequest request, ContentUnderstandingService cus) =>
 {
     var form = await request.ReadFormAsync();
     var file = form.Files.FirstOrDefault();
     if (file is null || file.Length == 0)
         return Results.BadRequest("No file provided");
 
-    var containerClient = blobClient.GetBlobContainerClient("document-uploads");
-    await containerClient.CreateIfNotExistsAsync();
-
-    var blobName = $"{Guid.NewGuid()}/{file.FileName}";
-    var blobClientInstance = containerClient.GetBlobClient(blobName);
-
     await using var stream = file.OpenReadStream();
-    await blobClientInstance.UploadAsync(stream, overwrite: true);
+    using var ms = new MemoryStream();
+    await stream.CopyToAsync(ms);
+    var fileBytes = ms.ToArray();
 
-    var result = await cus.AnalyzeDocumentAsync(blobClientInstance.Uri.ToString());
+    var result = await cus.AnalyzeBinaryAsync(file.FileName, fileBytes);
     return Results.Ok(result);
 })
 .WithName("UploadDocument")
@@ -179,24 +175,20 @@ app.MapPost("/api/documents/analyze-agent", async (HttpRequest request, Document
 .WithName("AnalyzeWithAgent")
 .DisableAntiforgery();
 
-app.MapPost("/api/documents/squad-process", async (HttpRequest request, DocumentProcessingSquad squad, ContentUnderstandingService cus, BlobServiceClient blobClient) =>
+app.MapPost("/api/documents/squad-process", async (HttpRequest request, DocumentProcessingSquad squad, ContentUnderstandingService cus) =>
 {
     var form = await request.ReadFormAsync();
     var file = form.Files.FirstOrDefault();
     if (file is null || file.Length == 0)
         return Results.BadRequest("No file provided");
 
-    var containerClient = blobClient.GetBlobContainerClient("document-uploads");
-    await containerClient.CreateIfNotExistsAsync();
-
-    var blobName = $"{Guid.NewGuid()}/{file.FileName}";
-    var blobClientInstance = containerClient.GetBlobClient(blobName);
-
     await using var stream = file.OpenReadStream();
-    await blobClientInstance.UploadAsync(stream, overwrite: true);
+    using var ms = new MemoryStream();
+    await stream.CopyToAsync(ms);
+    var fileBytes = ms.ToArray();
 
-    // Run CUS extraction first
-    var cusResult = await cus.AnalyzeDocumentAsync(blobClientInstance.Uri.ToString());
+    // Run CUS extraction first (binary upload, no blob storage needed)
+    var cusResult = await cus.AnalyzeBinaryAsync(file.FileName, fileBytes);
 
     // Feed CUS results into the agent squad pipeline
     var documentContext = $"""
