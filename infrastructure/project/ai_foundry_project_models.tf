@@ -75,7 +75,7 @@ resource "azapi_resource" "model_embedding" {
       }
     }
     sku = {
-      name     = "Standard"
+      name     = "GlobalStandard"
       capacity = 120
     }
   }
