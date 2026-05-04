@@ -1,33 +1,44 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Azure.Core;
+using Azure.Identity;
 using ContentUnderstanding.Api.Models;
 
 namespace ContentUnderstanding.Api.Services;
 
 /// <summary>
 /// Service that calls Azure AI Content Understanding to analyze uploaded documents.
+/// Uses DefaultAzureCredential (RBAC) — no API keys required.
 /// </summary>
 public class ContentUnderstandingService
 {
     private readonly string _endpoint;
-    private readonly string _apiKey;
     private readonly HttpClient _httpClient;
+    private readonly TokenCredential _credential;
 
     public ContentUnderstandingService(IConfiguration configuration)
     {
         _endpoint = configuration["Azure:ContentUnderstandingEndpoint"]
             ?? throw new InvalidOperationException("Azure:ContentUnderstandingEndpoint is not configured");
-        _apiKey = configuration["Azure:ContentUnderstandingKey"]
-            ?? throw new InvalidOperationException("Azure:ContentUnderstandingKey is not configured");
+        _credential = new DefaultAzureCredential();
         _httpClient = new HttpClient();
-        _httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", _apiKey);
+    }
+
+    private async Task<string> GetAccessTokenAsync()
+    {
+        var tokenRequest = new TokenRequestContext(["https://cognitiveservices.azure.com/.default"]);
+        var token = await _credential.GetTokenAsync(tokenRequest, CancellationToken.None);
+        return token.Token;
     }
 
     public async Task<DocumentAnalysisResult> AnalyzeDocumentAsync(string blobUrl)
     {
         var analyzerName = "banking-document-analyzer";
         var requestUrl = $"{_endpoint.TrimEnd('/')}/contentunderstanding/analyzers/{analyzerName}:analyze?api-version=2024-12-01-preview";
+
+        var token = await GetAccessTokenAsync();
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var requestBody = new
         {
@@ -44,7 +55,6 @@ public class ContentUnderstandingService
 
         var operationLocation = response.Headers.GetValues("Operation-Location").First();
 
-        // Poll for completion
         return await PollForResultAsync(operationLocation);
     }
 

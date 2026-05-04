@@ -1,23 +1,11 @@
-variable "resource_group_name" {
-  description = "Name of the Azure Resource Group"
+variable "region" {
+  description = "Azure region to deploy resources"
   type        = string
-  default     = "rg-content-understanding-demo"
+  default     = "eastus2"
 }
 
-variable "location" {
-  description = "Azure region for resources"
+variable "tags" {
+  description = "Tags to apply to resources"
   type        = string
-  default     = "eastus"
-}
-
-variable "storage_account_name" {
-  description = "Name of the Storage Account (must be globally unique)"
-  type        = string
-  default     = "stcusdemo"
-}
-
-variable "cognitive_account_name" {
-  description = "Name of the Azure AI Services account"
-  type        = string
-  default     = "cog-cus-demo"
+  default     = "Content Understanding Demo"
 }

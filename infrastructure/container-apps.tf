@@ -1,25 +1,24 @@
 # Container Apps deployment (stretch goal)
-# Adds Azure Container Apps with a persistent backend (Cosmos DB)
 
 resource "azurerm_log_analytics_workspace" "main" {
-  name                = "log-cus-demo"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  name                = local.loganalytics_name
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
   sku                 = "PerGB2018"
   retention_in_days   = 30
 }
 
 resource "azurerm_container_app_environment" "main" {
-  name                       = "cae-cus-demo"
-  location                   = azurerm_resource_group.main.location
-  resource_group_name        = azurerm_resource_group.main.name
+  name                       = local.aca_name
+  location                   = azurerm_resource_group.this.location
+  resource_group_name        = azurerm_resource_group.this.name
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
 }
 
 resource "azurerm_cosmosdb_account" "main" {
-  name                = var.cosmos_account_name
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+  name                = local.cosmos_account_name
+  location            = azurerm_resource_group.this.location
+  resource_group_name = azurerm_resource_group.this.name
   offer_type          = "Standard"
   kind                = "GlobalDocumentDB"
 
@@ -28,21 +27,21 @@ resource "azurerm_cosmosdb_account" "main" {
   }
 
   geo_location {
-    location          = azurerm_resource_group.main.location
+    location          = azurerm_resource_group.this.location
     failover_priority = 0
   }
 }
 
 resource "azurerm_cosmosdb_sql_database" "main" {
   name                = "AccountOpeningDB"
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = azurerm_resource_group.this.name
   account_name        = azurerm_cosmosdb_account.main.name
   throughput          = 400
 }
 
 resource "azurerm_cosmosdb_sql_container" "applications" {
   name                = "applications"
-  resource_group_name = azurerm_resource_group.main.name
+  resource_group_name = azurerm_resource_group.this.name
   account_name        = azurerm_cosmosdb_account.main.name
   database_name       = azurerm_cosmosdb_sql_database.main.name
   partition_key_paths = ["/applicantId"]
@@ -50,26 +49,21 @@ resource "azurerm_cosmosdb_sql_container" "applications" {
 }
 
 resource "azurerm_container_app" "backend" {
-  name                         = "ca-cus-backend"
+  name                         = "ca-backend"
   container_app_environment_id = azurerm_container_app_environment.main.id
-  resource_group_name          = azurerm_resource_group.main.name
+  resource_group_name          = azurerm_resource_group.this.name
   revision_mode                = "Single"
 
   template {
     container {
       name   = "backend"
-      image  = "ghcr.io/${var.github_repo_owner}/content-understanding-demo/backend:latest"
+      image  = "ghcr.io/briandenicola/content-understanding-demo/backend:latest"
       cpu    = 0.5
       memory = "1Gi"
 
       env {
         name  = "Azure__ContentUnderstandingEndpoint"
         value = azurerm_cognitive_account.content_understanding.endpoint
-      }
-
-      env {
-        name        = "Azure__ContentUnderstandingKey"
-        secret_name = "cus-key"
       }
 
       env {
@@ -96,11 +90,6 @@ resource "azurerm_container_app" "backend" {
       percentage      = 100
       latest_revision = true
     }
-  }
-
-  secret {
-    name  = "cus-key"
-    value = azurerm_cognitive_account.content_understanding.primary_access_key
   }
 }
 

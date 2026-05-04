@@ -1,6 +1,8 @@
 version: '3'
 
 vars:
+  TITLE: Content Understanding Demo
+  DEFAULT_REGION: eastus2
   BACKEND_DIR: src/backend/ContentUnderstanding.Api
   FRONTEND_DIR: src/frontend
   INFRA_DIR: infrastructure
@@ -13,11 +15,10 @@ tasks:
 
   # === Quick Start ===
   up:
-    desc: Full dev environment setup and launch (setup → build → run)
+    desc: Full dev environment setup and launch
     cmds:
       - task: setup
       - task: build
-      - task: env:template
       - task: run
 
   # === Setup ===
@@ -66,8 +67,19 @@ tasks:
       - run:frontend
 
   run:backend:
-    desc: Run .NET backend with hot reload
+    desc: Run .NET backend with hot reload (uses Terraform outputs)
     dir: '{{.BACKEND_DIR}}'
+    vars:
+      CUS_ENDPOINT:
+        sh: terraform -chdir=../../infrastructure output -raw CONTENT_UNDERSTANDING_ENDPOINT 2>/dev/null || echo ""
+      STORAGE_CONN:
+        sh: terraform -chdir=../../infrastructure output -raw STORAGE_CONNECTION_STRING 2>/dev/null || echo ""
+      FOUNDRY_ENDPOINT:
+        sh: terraform -chdir=../../infrastructure output -raw FOUNDRY_PROJECT_ENDPOINT 2>/dev/null || echo ""
+    env:
+      Azure__ContentUnderstandingEndpoint: '{{.CUS_ENDPOINT}}'
+      Azure__StorageConnectionString: '{{.STORAGE_CONN}}'
+      Azure__FoundryProjectEndpoint: '{{.FOUNDRY_ENDPOINT}}'
     cmds:
       - dotnet watch run
 
@@ -78,29 +90,32 @@ tasks:
       - npm run dev
 
   # === Infrastructure ===
-  infra:init:
-    desc: Initialize Terraform
-    dir: '{{.INFRA_DIR}}'
+  init:
+    desc: Initialize Terraform for {{.TITLE}}
     cmds:
-      - terraform init
+      - terraform -chdir=./{{.INFRA_DIR}} workspace new {{.REGION}} || true
+      - terraform -chdir=./{{.INFRA_DIR}} workspace select {{.REGION}}
+      - terraform -chdir=./{{.INFRA_DIR}} init
+    vars:
+      REGION: '{{default .DEFAULT_REGION .CLI_ARGS}}'
 
-  infra:plan:
-    desc: Plan Terraform changes
-    dir: '{{.INFRA_DIR}}'
+  apply:
+    desc: Apply Terraform infrastructure for {{.TITLE}}
     cmds:
-      - terraform plan
+      - terraform -chdir=./{{.INFRA_DIR}} apply -auto-approve -compact-warnings
+        -var "region={{.REGION}}"
+    vars:
+      REGION: '{{default .DEFAULT_REGION .CLI_ARGS}}'
 
-  infra:apply:
-    desc: Apply Terraform infrastructure
-    dir: '{{.INFRA_DIR}}'
+  output:
+    desc: Show Terraform outputs for {{.TITLE}}
     cmds:
-      - terraform apply
+      - terraform -chdir=./{{.INFRA_DIR}} output
 
-  infra:destroy:
-    desc: Destroy Terraform infrastructure
-    dir: '{{.INFRA_DIR}}'
+  down:
+    desc: Destroy all Azure resources
     cmds:
-      - terraform destroy
+      - terraform -chdir=./{{.INFRA_DIR}} destroy -auto-approve
 
   # === Docker ===
   docker:build:
@@ -110,9 +125,17 @@ tasks:
       - docker build -t content-understanding-api:local .
 
   docker:run:
-    desc: Run backend in Docker
+    desc: Run backend in Docker (uses Terraform outputs)
+    vars:
+      CUS_ENDPOINT:
+        sh: terraform -chdir=./{{.INFRA_DIR}} output -raw CONTENT_UNDERSTANDING_ENDPOINT 2>/dev/null || echo ""
+      STORAGE_CONN:
+        sh: terraform -chdir=./{{.INFRA_DIR}} output -raw STORAGE_CONNECTION_STRING 2>/dev/null || echo ""
     cmds:
-      - docker run --rm -p 8080:8080 --env-file .env content-understanding-api:local
+      - docker run --rm -p 8080:8080
+        -e Azure__ContentUnderstandingEndpoint={{.CUS_ENDPOINT}}
+        -e Azure__StorageConnectionString={{.STORAGE_CONN}}
+        content-understanding-api:local
 
   # === Quality ===
   lint:
@@ -157,17 +180,3 @@ tasks:
     desc: Login to Azure CLI
     cmds:
       - az login
-
-  env:template:
-    desc: Create .env template file
-    cmds:
-      - |
-        cat <<EOF > .env
-        Azure__ContentUnderstandingEndpoint=https://your-endpoint.cognitiveservices.azure.com/
-        Azure__ContentUnderstandingKey=your-key-here
-        Azure__StorageConnectionString=your-connection-string
-        Azure__FoundryProjectEndpoint=https://your-project.services.ai.azure.com/
-        Azure__ModelDeploymentName=gpt-4o
-        EOF
-    status:
-      - test -f .env
