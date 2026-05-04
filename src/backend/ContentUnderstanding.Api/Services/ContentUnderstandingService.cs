@@ -37,33 +37,28 @@ public class ContentUnderstandingService
 
     /// <summary>
     /// One-time setup: configure default model deployment mappings for CUS prebuilt analyzers.
+    /// This MUST succeed before any analyze calls will work.
     /// </summary>
     public async Task ConfigureDefaultsAsync()
     {
         _logger.LogInformation("Configuring CUS default model deployments...");
-        try
+
+        var modelDeployments = new Dictionary<string, string>
         {
-            var modelDeployments = new Dictionary<string, string>
-            {
-                ["gpt-4.1"] = "gpt-4.1",
-                ["gpt-4.1-mini"] = "gpt-4.1-mini",
-                ["text-embedding-3-large"] = "text-embedding-3-large"
-            };
+            ["gpt-4.1"] = "gpt-4.1",
+            ["gpt-4.1-mini"] = "gpt-4.1-mini",
+            ["text-embedding-3-large"] = "text-embedding-3-large"
+        };
 
-            var response = await _client.UpdateDefaultsAsync(modelDeployments);
-            _logger.LogInformation("✅ CUS model defaults configured successfully");
+        var response = await _client.UpdateDefaultsAsync(modelDeployments);
+        _logger.LogInformation("✅ CUS model defaults configured successfully");
 
-            if (response.Value?.ModelDeployments != null)
+        if (response.Value?.ModelDeployments != null)
+        {
+            foreach (var kvp in response.Value.ModelDeployments)
             {
-                foreach (var kvp in response.Value.ModelDeployments)
-                {
-                    _logger.LogDebug("  {Model} → {Deployment}", kvp.Key, kvp.Value);
-                }
+                _logger.LogInformation("  {Model} → {Deployment}", kvp.Key, kvp.Value);
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "⚠️  Failed to configure CUS defaults (may already be configured): {Message}", ex.Message);
         }
     }
 
