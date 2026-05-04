@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import DocumentUpload from './components/DocumentUpload.vue'
 import ResultsPanel from './components/ResultsPanel.vue'
-import PdfPreview from './components/PdfPreview.vue'
-import { ref } from 'vue'
+import { ref }from 'vue'
 
 interface ExtractedField {
   name: string
   value: string
   confidence: number
+  confidenceLabel: string
   category: string | null
 }
 
@@ -17,6 +17,7 @@ interface AnalysisResult {
   fileName: string
   analyzedAt: string
   overallConfidence: number
+  confidenceExplanation: string
   fields: ExtractedField[]
   agentSummary: string | null
   markdown: string | null
@@ -26,7 +27,6 @@ const results = ref<AnalysisResult[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 const pdfUrl = ref<string | null>(null)
-const pdfFileName = ref<string | null>(null)
 
 async function handleUpload(file: File, useAgent: boolean) {
   isLoading.value = true
@@ -34,7 +34,6 @@ async function handleUpload(file: File, useAgent: boolean) {
 
   // Create object URL for PDF preview
   pdfUrl.value = URL.createObjectURL(file)
-  pdfFileName.value = file.name
 
   const formData = new FormData()
   formData.append('file', file)
@@ -75,10 +74,7 @@ async function handleUpload(file: File, useAgent: boolean) {
         {{ error }}
       </div>
 
-      <div v-if="pdfUrl || results.length > 0" class="content-panels">
-        <PdfPreview v-if="pdfUrl" :url="pdfUrl" :file-name="pdfFileName" />
-        <ResultsPanel :results="results" />
-      </div>
+      <ResultsPanel v-if="results.length > 0" :results="results" :pdf-url="pdfUrl" />
     </main>
   </div>
 </template>
@@ -126,19 +122,6 @@ body {
   flex-direction: column;
   gap: 1.5rem;
   padding: 0 2rem 2rem;
-}
-
-.content-panels {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  align-items: start;
-}
-
-@media (max-width: 768px) {
-  .content-panels {
-    grid-template-columns: 1fr;
-  }
 }
 
 .error-banner {

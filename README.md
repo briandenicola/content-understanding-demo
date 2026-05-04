@@ -119,7 +119,7 @@ The following models are deployed sequentially (Azure requires serial deployment
 | `gpt-5.4` | GlobalStandard | Agent document review |
 | `gpt-4.1` | GlobalStandard | CUS prebuilt analyzers (invoice, receipt, ID) |
 | `gpt-4.1-mini` | GlobalStandard | CUS RAG analyzers (documentSearch) |
-| `text-embedding-3-large` | Standard | Semantic search & embeddings |
+| `text-embedding-3-large` | GlobalStandard | Semantic search & embeddings |
 
 ## Authentication
 
@@ -149,7 +149,7 @@ Required role assignments (auto-provisioned by Terraform):
 2. **Binary Analysis** — Backend sends raw bytes to CUS via `AnalyzeBinaryAsync` (no blob storage needed)
 3. **Field Extraction** — CUS `prebuilt-documentSearch` analyzer extracts text/markdown
 4. **Agent Review** — Agent Framework reviews extraction for account-opening eligibility
-5. **Response** — Structured result with document type, extracted fields, confidence scores, and agent summary
+5. **Response** — Structured result with document type, extracted fields, account-readiness score (based on required banking fields), and agent summary
 
 ### CUS Model Defaults (One-Time Setup)
 

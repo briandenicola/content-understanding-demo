@@ -263,61 +263,74 @@ public class ContentUnderstandingService
         };
     }
 
+    // Required fields for bank account opening
+    private static readonly (string Name, string[] Patterns)[] AccountOpeningFields =
+    [
+        ("Full Name", ["name", "full name", "first name", "last name", "applicant"]),
+        ("Date of Birth", ["date of birth", "dob", "birth date", "born"]),
+        ("Address", ["address", "street", "city", "state", "zip", "postal"]),
+        ("ID Number", ["id number", "license number", "passport number", "ssn", "social security", "document number"]),
+        ("ID Expiration", ["expir", "valid until", "valid through", "exp date"])
+    ];
+
+    private static (int found, int total, List<string> matched, List<string> missing) CheckAccountOpeningFields(string markdown, List<ExtractedField> fields)
+    {
+        var contentLower = (markdown ?? "").ToLowerInvariant();
+        var fieldValues = fields.Select(f => $"{f.Name} {f.Value}".ToLowerInvariant()).ToList();
+        var allText = contentLower + " " + string.Join(" ", fieldValues);
+
+        var matched = new List<string>();
+        var missing = new List<string>();
+
+        foreach (var (name, patterns) in AccountOpeningFields)
+        {
+            if (patterns.Any(p => allText.Contains(p)))
+                matched.Add(name);
+            else
+                missing.Add(name);
+        }
+
+        return (matched.Count, AccountOpeningFields.Length, matched, missing);
+    }
+
     private static double ComputeExtractionConfidence(string markdown, List<ExtractedField> fields)
     {
-        // If we have structured fields with SDK confidence, use those
-        if (fields.Count > 0 && fields.Any(f => f.Confidence > 0))
-            return fields.Where(f => f.Confidence > 0).Average(f => f.Confidence);
-
-        // For prebuilt-documentSearch (markdown extraction), compute quality score based on:
-        // - Content length (more content = higher quality extraction)
-        // - Structure markers (headings, lists = well-parsed)
-        if (string.IsNullOrWhiteSpace(markdown))
+        if (string.IsNullOrWhiteSpace(markdown) && fields.Count == 0)
             return 0.0;
 
-        var score = 0.5; // Base: we got content back
+        var (found, total, _, _) = CheckAccountOpeningFields(markdown, fields);
 
-        // Length bonus (up to +0.2)
-        var charCount = markdown.Length;
-        if (charCount > 200) score += 0.1;
-        if (charCount > 500) score += 0.1;
+        // Score is proportion of required account-opening fields detected
+        // with a small bonus for extraction quality
+        var fieldScore = (double)found / total;
 
-        // Structure bonus (up to +0.2)
-        if (markdown.Contains('#') || markdown.Contains("**")) score += 0.1;
-        if (markdown.Contains('\n') && markdown.Split('\n').Length > 3) score += 0.1;
+        // Small bonus for rich content (up to +0.1)
+        var qualityBonus = 0.0;
+        if (!string.IsNullOrWhiteSpace(markdown))
+        {
+            if (markdown.Length > 500) qualityBonus = 0.1;
+            else if (markdown.Length > 200) qualityBonus = 0.05;
+        }
 
-        // Document type detection bonus (+0.1)
-        var docType = DetectDocumentType(markdown);
-        if (docType != "Unknown Document") score += 0.1;
-
-        return Math.Min(score, 1.0);
+        return Math.Min(fieldScore * 0.9 + qualityBonus, 1.0);
     }
 
     private static string BuildConfidenceExplanation(string markdown, List<ExtractedField> fields)
     {
-        if (fields.Count > 0 && fields.Any(f => f.Confidence > 0))
-            return $"Based on {fields.Count} extracted field(s) with SDK-provided confidence scores.";
-
-        if (string.IsNullOrWhiteSpace(markdown))
+        if (string.IsNullOrWhiteSpace(markdown) && fields.Count == 0)
             return "No content could be extracted from this document.";
 
-        var parts = new List<string>();
-        var charCount = markdown.Length;
+        var (found, total, matched, missing) = CheckAccountOpeningFields(markdown, fields);
 
-        if (charCount > 500)
-            parts.Add("Full text extracted successfully");
-        else if (charCount > 200)
-            parts.Add("Partial text extracted");
-        else
-            parts.Add("Limited text extracted");
+        var explanation = $"{found} of {total} required account-opening fields detected";
 
-        var docType = DetectDocumentType(markdown);
-        if (docType != "Unknown Document")
-            parts.Add($"identified as {docType}");
+        if (matched.Count > 0)
+            explanation += $" (found: {string.Join(", ", matched)})";
 
-        parts.Add("score reflects extraction completeness, not content accuracy");
+        if (missing.Count > 0)
+            explanation += $". Missing: {string.Join(", ", missing)}";
 
-        return string.Join("; ", parts) + ".";
+        return explanation + ".";
     }
 
     private static string ConfidenceLabelFor(double confidence) => confidence switch

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import PdfPreview from './PdfPreview.vue'
+
 interface ExtractedField {
   name: string
   value: string
@@ -19,12 +21,24 @@ interface AnalysisResult {
   markdown: string | null
 }
 
-defineProps<{ results: AnalysisResult[] }>()
+defineProps<{ results: AnalysisResult[]; pdfUrl: string | null }>()
 
 function confidenceColor(confidence: number): string {
   if (confidence >= 0.85) return '#1b7340'
   if (confidence >= 0.70) return '#b8860b'
   return '#b71c1c'
+}
+
+function renderMarkdown(md: string): string {
+  return md
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h5>$1</h5>')
+    .replace(/^## (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^# (.+)$/gm, '<h3>$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>')
 }
 
 function groupByCategory(fields: ExtractedField[]): Record<string, ExtractedField[]> {
@@ -38,10 +52,11 @@ function groupByCategory(fields: ExtractedField[]): Record<string, ExtractedFiel
 </script>
 
 <template>
-  <div v-if="results.length > 0" class="results">
+  <div class="results">
     <h2>Analysis Results</h2>
 
     <div v-for="result in results" :key="result.documentId" class="result-card">
+      <!-- Header: doc type + confidence -->
       <div class="result-header">
         <div>
           <strong>{{ result.documentType }}</strong>
@@ -49,7 +64,7 @@ function groupByCategory(fields: ExtractedField[]): Record<string, ExtractedFiel
         </div>
         <div class="confidence-section">
           <div class="confidence-badge" :style="{ background: confidenceColor(result.overallConfidence) }">
-            {{ (result.overallConfidence * 100).toFixed(0) }}% extraction quality
+            {{ (result.overallConfidence * 100).toFixed(0) }}% account readiness
           </div>
         </div>
       </div>
@@ -58,6 +73,7 @@ function groupByCategory(fields: ExtractedField[]): Record<string, ExtractedFiel
         {{ result.confidenceExplanation }}
       </p>
 
+      <!-- Extracted fields -->
       <div v-for="(fields, category) in groupByCategory(result.fields)" :key="category" class="field-group">
         <h4>{{ category }}</h4>
         <div class="fields-grid">
@@ -71,6 +87,19 @@ function groupByCategory(fields: ExtractedField[]): Record<string, ExtractedFiel
         </div>
       </div>
 
+      <!-- Side-by-side: PDF + Markdown -->
+      <div class="content-panels">
+        <div v-if="pdfUrl" class="panel">
+          <h4>Document Preview</h4>
+          <PdfPreview :url="pdfUrl" :file-name="result.fileName" />
+        </div>
+        <div v-if="result.markdown" class="panel">
+          <h4>Extracted Content</h4>
+          <div class="markdown-content" v-html="renderMarkdown(result.markdown)"></div>
+        </div>
+      </div>
+
+      <!-- Agent Review -->
       <div v-if="result.agentSummary" class="agent-summary">
         <h4>Agent Review</h4>
         <pre>{{ result.agentSummary }}</pre>
@@ -171,6 +200,34 @@ function groupByCategory(fields: ExtractedField[]): Record<string, ExtractedFiel
   font-weight: 600;
 }
 
+.content-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+}
+
+.content-panels .panel h4 {
+  color: #0f3460;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+.markdown-content {
+  background: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  max-height: 500px;
+  overflow-y: auto;
+  word-break: break-word;
+}
+
 .agent-summary {
   margin-top: 1rem;
   padding-top: 1rem;
@@ -178,6 +235,10 @@ function groupByCategory(fields: ExtractedField[]): Record<string, ExtractedFiel
 }
 
 .agent-summary h4 {
+  color: #0f3460;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
 }
 
@@ -188,5 +249,11 @@ function groupByCategory(fields: ExtractedField[]): Record<string, ExtractedFiel
   font-size: 0.85rem;
   white-space: pre-wrap;
   overflow-x: auto;
+}
+
+@media (max-width: 768px) {
+  .content-panels {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
