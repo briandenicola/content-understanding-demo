@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import DocumentUpload from './components/DocumentUpload.vue'
 import ResultsPanel from './components/ResultsPanel.vue'
+import PdfPreview from './components/PdfPreview.vue'
 import { ref } from 'vue'
 
 interface ExtractedField {
@@ -18,15 +19,22 @@ interface AnalysisResult {
   overallConfidence: number
   fields: ExtractedField[]
   agentSummary: string | null
+  markdown: string | null
 }
 
 const results = ref<AnalysisResult[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
+const pdfUrl = ref<string | null>(null)
+const pdfFileName = ref<string | null>(null)
 
 async function handleUpload(file: File, useAgent: boolean) {
   isLoading.value = true
   error.value = null
+
+  // Create object URL for PDF preview
+  pdfUrl.value = URL.createObjectURL(file)
+  pdfFileName.value = file.name
 
   const formData = new FormData()
   formData.append('file', file)
@@ -56,7 +64,7 @@ async function handleUpload(file: File, useAgent: boolean) {
 <template>
   <div class="app">
     <header class="header">
-      <h1>🏦 Account Opening Portal</h1>
+      <h1>Account Opening Portal</h1>
       <p class="subtitle">Upload documents for identity verification</p>
     </header>
 
@@ -64,10 +72,13 @@ async function handleUpload(file: File, useAgent: boolean) {
       <DocumentUpload :is-loading="isLoading" @upload="handleUpload" />
 
       <div v-if="error" class="error-banner">
-        ⚠️ {{ error }}
+        {{ error }}
       </div>
 
-      <ResultsPanel :results="results" />
+      <div v-if="pdfUrl || results.length > 0" class="content-panels">
+        <PdfPreview v-if="pdfUrl" :url="pdfUrl" :file-name="pdfFileName" />
+        <ResultsPanel :results="results" />
+      </div>
     </main>
   </div>
 </template>
@@ -80,43 +91,61 @@ async function handleUpload(file: File, useAgent: boolean) {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #f5f7fa;
-  color: #1a1a2e;
+  font-family: 'Wells Fargo Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #faf8f5;
+  color: #2d2926;
 }
 
 .app {
-  max-width: 960px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 0;
 }
 
 .header {
-  text-align: center;
+  background: #b71c1c;
+  color: white;
+  padding: 1.5rem 2rem;
   margin-bottom: 2rem;
 }
 
 .header h1 {
-  font-size: 2rem;
-  color: #0f3460;
+  font-size: 1.75rem;
+  color: white;
+  font-weight: 600;
 }
 
 .subtitle {
-  color: #666;
-  margin-top: 0.5rem;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 0.25rem;
+  font-size: 0.95rem;
 }
 
 .main {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  padding: 0 2rem 2rem;
+}
+
+.content-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .content-panels {
+    grid-template-columns: 1fr;
+  }
 }
 
 .error-banner {
-  background: #fee;
-  border: 1px solid #fcc;
+  background: #fef3f2;
+  border: 1px solid #fecaca;
   border-radius: 8px;
   padding: 1rem;
-  color: #c33;
+  color: #b71c1c;
 }
 </style>

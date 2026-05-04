@@ -33,7 +33,7 @@ function submit() {
 
 <template>
   <div class="upload-card">
-    <h2>📄 Upload Document</h2>
+    <h2>Upload Document</h2>
     <p class="help-text">Supported: Passport, Driver's License, Utility Bill, Bank Statement (PDF)</p>
 
     <div
@@ -44,11 +44,11 @@ function submit() {
       @drop.prevent="handleDrop"
     >
       <div v-if="!selectedFile">
-        <p class="drop-icon">📁</p>
+        <p class="drop-icon">&#x2191;</p>
         <p>Drag & drop a PDF here, or <label class="file-label">browse<input type="file" accept=".pdf" @change="handleFileInput" hidden /></label></p>
       </div>
       <div v-else class="selected-file">
-        <p>✅ {{ selectedFile.name }} ({{ (selectedFile.size / 1024).toFixed(1) }} KB)</p>
+        <p>{{ selectedFile.name }} ({{ (selectedFile.size / 1024).toFixed(1) }} KB)</p>
       </div>
     </div>
 
@@ -60,8 +60,8 @@ function submit() {
     </div>
 
     <button class="submit-btn" :disabled="!selectedFile || isLoading" @click="submit">
-      <span v-if="isLoading">⏳ Analyzing...</span>
-      <span v-else>🚀 Analyze Document</span>
+      <span v-if="isLoading">Analyzing...</span>
+      <span v-else>Analyze Document</span>
     </button>
   </div>
 </template>

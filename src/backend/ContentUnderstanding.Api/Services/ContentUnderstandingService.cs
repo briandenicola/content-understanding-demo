@@ -242,6 +242,7 @@ public class ContentUnderstandingService
                             Name = field.Key,
                             Value = fieldValue,
                             Confidence = field.Value?.Confidence ?? 0.0,
+                            ConfidenceLabel = ConfidenceLabelFor(field.Value?.Confidence ?? 0.0),
                             Category = DetermineCategory(field.Key)
                         });
                     }
@@ -255,9 +256,76 @@ public class ContentUnderstandingService
             DocumentType = DetectDocumentType(markdownContent),
             FileName = fileName,
             AnalyzedAt = DateTime.UtcNow,
-            OverallConfidence = fields.Count > 0 ? fields.Average(f => f.Confidence) : 0.95,
+            OverallConfidence = ComputeExtractionConfidence(markdownContent, fields),
+            ConfidenceExplanation = BuildConfidenceExplanation(markdownContent, fields),
             Markdown = markdownContent,
             Fields = fields
         };
     }
+
+    private static double ComputeExtractionConfidence(string markdown, List<ExtractedField> fields)
+    {
+        // If we have structured fields with SDK confidence, use those
+        if (fields.Count > 0 && fields.Any(f => f.Confidence > 0))
+            return fields.Where(f => f.Confidence > 0).Average(f => f.Confidence);
+
+        // For prebuilt-documentSearch (markdown extraction), compute quality score based on:
+        // - Content length (more content = higher quality extraction)
+        // - Structure markers (headings, lists = well-parsed)
+        if (string.IsNullOrWhiteSpace(markdown))
+            return 0.0;
+
+        var score = 0.5; // Base: we got content back
+
+        // Length bonus (up to +0.2)
+        var charCount = markdown.Length;
+        if (charCount > 200) score += 0.1;
+        if (charCount > 500) score += 0.1;
+
+        // Structure bonus (up to +0.2)
+        if (markdown.Contains('#') || markdown.Contains("**")) score += 0.1;
+        if (markdown.Contains('\n') && markdown.Split('\n').Length > 3) score += 0.1;
+
+        // Document type detection bonus (+0.1)
+        var docType = DetectDocumentType(markdown);
+        if (docType != "Unknown Document") score += 0.1;
+
+        return Math.Min(score, 1.0);
+    }
+
+    private static string BuildConfidenceExplanation(string markdown, List<ExtractedField> fields)
+    {
+        if (fields.Count > 0 && fields.Any(f => f.Confidence > 0))
+            return $"Based on {fields.Count} extracted field(s) with SDK-provided confidence scores.";
+
+        if (string.IsNullOrWhiteSpace(markdown))
+            return "No content could be extracted from this document.";
+
+        var parts = new List<string>();
+        var charCount = markdown.Length;
+
+        if (charCount > 500)
+            parts.Add("Full text extracted successfully");
+        else if (charCount > 200)
+            parts.Add("Partial text extracted");
+        else
+            parts.Add("Limited text extracted");
+
+        var docType = DetectDocumentType(markdown);
+        if (docType != "Unknown Document")
+            parts.Add($"identified as {docType}");
+
+        parts.Add("score reflects extraction completeness, not content accuracy");
+
+        return string.Join("; ", parts) + ".";
+    }
+
+    private static string ConfidenceLabelFor(double confidence) => confidence switch
+    {
+        >= 0.95 => "Very High",
+        >= 0.85 => "High",
+        >= 0.70 => "Medium",
+        >= 0.50 => "Low",
+        _ => "Very Low"
+    };
 }
