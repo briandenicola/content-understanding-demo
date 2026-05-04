@@ -84,8 +84,9 @@ resource "azapi_resource" "content_understanding" {
       type = "SystemAssigned"
     }
     properties = {
-      disableLocalAuth    = true
-      customSubDomainName = local.cognitive_account_name
+      disableLocalAuth       = true
+      allowProjectManagement = true
+      customSubDomainName    = local.cognitive_account_name
     }
   }
 
