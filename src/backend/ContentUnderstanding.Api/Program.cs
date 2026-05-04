@@ -102,6 +102,40 @@ logger.LogInformation("CUS Endpoint:     {Endpoint}", string.IsNullOrEmpty(cusEn
 logger.LogInformation("Foundry Project:  {Endpoint}", string.IsNullOrEmpty(foundryEndpoint) ? "⚠️  NOT CONFIGURED" : foundryEndpoint);
 logger.LogInformation("Storage Account:  {Status}", string.IsNullOrEmpty(storageConn) ? "⚠️  NOT CONFIGURED" : "✅ Configured");
 
+// Connectivity & RBAC validation at startup
+if (!string.IsNullOrEmpty(foundryEndpoint))
+{
+    logger.LogInformation("Verifying connectivity to Foundry Project...");
+    try
+    {
+        var credential = new DefaultAzureCredential();
+        var tokenRequest = new Azure.Core.TokenRequestContext(["https://cognitiveservices.azure.com/.default"]);
+        var token = await credential.GetTokenAsync(tokenRequest);
+        logger.LogInformation("✅ RBAC token acquired (expires {ExpiresOn})", token.ExpiresOn);
+
+        using var http = new HttpClient();
+        http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.Token);
+        var response = await http.GetAsync(foundryEndpoint);
+
+        if (response.IsSuccessStatusCode)
+            logger.LogInformation("✅ Foundry Project reachable (HTTP {StatusCode})", (int)response.StatusCode);
+        else
+        {
+            logger.LogCritical("❌ Foundry Project returned HTTP {StatusCode}: {Reason}", (int)response.StatusCode, response.ReasonPhrase);
+            throw new InvalidOperationException($"Foundry Project connectivity check failed: HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+        }
+    }
+    catch (Azure.Identity.AuthenticationFailedException ex)
+    {
+        logger.LogCritical(ex, "❌ RBAC authentication failed. Ensure your identity has 'Cognitive Services User' role on the AI Services resource.");
+        throw;
+    }
+}
+else
+{
+    logger.LogWarning("⚠️  Skipping connectivity check — Foundry endpoint not configured");
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
