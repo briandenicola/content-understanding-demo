@@ -11,6 +11,15 @@ tasks:
     cmds:
       - task --list
 
+  # === Quick Start ===
+  up:
+    desc: Full dev environment setup and launch (setup → build → run)
+    cmds:
+      - task: setup
+      - task: build
+      - task: env:template
+      - task: run
+
   # === Setup ===
   setup:
     desc: Install all dependencies (backend + frontend)
