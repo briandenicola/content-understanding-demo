@@ -5,11 +5,28 @@ import os
 
 os.makedirs('assets', exist_ok=True)
 
-# Fake data pools
-first_names = ['James','Maria','Robert','Sarah','Michael','Jennifer','David','Linda',
-               'William','Patricia','Carlos','Aisha','Wei','Fatima','Aleksandr']
-last_names = ['Thompson','Garcia','Chen','Williams','Patel','Johnson','Kim','Martinez',
-              'Anderson','Singh','Nakamura','OBrien','Hassan','Mueller','Petrov']
+# Seed for reproducibility
+random.seed(42)
+
+# Fake data pools - culturally diverse but consistently paired
+people = [
+    ('James', 'Thompson'),
+    ('Maria', 'Garcia'),
+    ('Robert', 'Chen'),
+    ('Sarah', 'Williams'),
+    ('Michael', 'Patel'),
+    ('Jennifer', 'Johnson'),
+    ('David', 'Kim'),
+    ('Linda', 'Martinez'),
+    ('William', 'Anderson'),
+    ('Patricia', 'Singh'),
+    ('Carlos', 'Rivera'),
+    ('Aisha', 'Hassan'),
+    ('Wei', 'Zhang'),
+    ('Fatima', 'Al-Rashid'),
+    ('Aleksandr', 'Petrov'),
+]
+
 streets = ['123 Oak Lane','456 Maple Ave','789 Pine St','1010 Cedar Blvd',
            '2020 Elm Dr','555 Birch Way','777 Walnut Ct','300 Spruce Rd']
 cities = [('Austin','TX','78701'),('Denver','CO','80202'),('Portland','OR','97201'),
@@ -37,12 +54,15 @@ def ssn_masked():
     return f"***-**-{random.randint(1000, 9999)}"
 
 
+def pick_person():
+    return random.choice(people)
+
+
 docs = []
 
 # --- 5 Driver's Licenses ---
 for i in range(5):
-    fn = random.choice(first_names)
-    ln = random.choice(last_names)
+    fn, ln = pick_person()
     city, state, zipcode = random.choice(cities)
     pdf = FPDF()
     pdf.add_page()
@@ -55,7 +75,7 @@ for i in range(5):
     pdf.cell(0, 8, f"Date of Birth: {random.choice(dobs)}", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 8, f"Address: {random.choice(streets)}", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 8, f"City/State/Zip: {city}, {state} {zipcode}", new_x="LMARGIN", new_y="NEXT")
-    sex = random.choice(["M", "F"])
+    sex = random.choice(["M", "F", "X"])
     eyes = random.choice(["BRN", "BLU", "GRN", "HZL"])
     ht_ft = random.randint(5, 6)
     ht_in = random.randint(0, 11)
@@ -65,14 +85,13 @@ for i in range(5):
     expires = f"2029-{random.randint(1,12):02d}-{random.randint(1,28):02d}"
     pdf.cell(0, 8, f"Class: {dl_class}  Issued: {issued}", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 8, f"Expires: {expires}", new_x="LMARGIN", new_y="NEXT")
-    fname = f"assets/drivers_license_{i+1:02d}_{ln.lower()}.pdf"
+    fname = f"assets/sample_id_{i+1:02d}.pdf"
     pdf.output(fname)
     docs.append(fname)
 
 # --- 3 Passports ---
 for i in range(3):
-    fn = random.choice(first_names)
-    ln = random.choice(last_names)
+    fn, ln = pick_person()
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font('Helvetica', 'B', 20)
@@ -86,19 +105,18 @@ for i in range(3):
     pdf.cell(0, 8, f"Given Names: {fn}", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 8, "Nationality: United States", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 8, f"Date of Birth: {random.choice(dobs)}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 8, f"Sex: {random.choice(['M','F'])}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 8, f"Sex: {random.choice(['M','F','X'])}", new_x="LMARGIN", new_y="NEXT")
     birth_city = random.choice(cities)
     pdf.cell(0, 8, f"Place of Birth: {birth_city[0]}, {birth_city[1]}", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 8, f"Date of Issue: 2022-{random.randint(1,12):02d}-{random.randint(1,28):02d}", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 8, f"Date of Expiration: 2032-{random.randint(1,12):02d}-{random.randint(1,28):02d}", new_x="LMARGIN", new_y="NEXT")
-    fname = f"assets/passport_{i+1:02d}_{ln.lower()}.pdf"
+    fname = f"assets/sample_id_{i+6:02d}.pdf"
     pdf.output(fname)
     docs.append(fname)
 
 # --- 4 Utility Bills (Proof of Address) ---
 for i in range(4):
-    fn = random.choice(first_names)
-    ln = random.choice(last_names)
+    fn, ln = pick_person()
     city, state, zipcode = random.choice(cities)
     utility = random.choice(utilities)
     pdf = FPDF()
@@ -132,14 +150,13 @@ for i in range(4):
     pdf.cell(0, 7, f"Previous Reading: {prev_reading} kWh", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 7, f"Current Reading: {curr_reading} kWh", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 7, f"Usage This Period: {usage} kWh", new_x="LMARGIN", new_y="NEXT")
-    fname = f"assets/utility_bill_{i+1:02d}_{ln.lower()}.pdf"
+    fname = f"assets/sample_proof_of_address_{i+1:02d}.pdf"
     pdf.output(fname)
     docs.append(fname)
 
 # --- 5 Account Application Forms ---
 for i in range(5):
-    fn = random.choice(first_names)
-    ln = random.choice(last_names)
+    fn, ln = pick_person()
     city, state, zipcode = random.choice(cities)
     pdf = FPDF()
     pdf.add_page()
@@ -193,14 +210,13 @@ for i in range(5):
     pdf.set_font('Helvetica', '', 11)
     sign_date = f"2026-0{random.randint(1,4)}-{random.randint(1,28):02d}"
     pdf.cell(0, 7, f"Signature: ________________________  Date: {sign_date}", new_x="LMARGIN", new_y="NEXT")
-    fname = f"assets/account_application_{i+1:02d}_{ln.lower()}.pdf"
+    fname = f"assets/sample_application_{i+1:02d}.pdf"
     pdf.output(fname)
     docs.append(fname)
 
 # --- 2 Bank Statements (Proof of Address alternative) ---
 for i in range(2):
-    fn = random.choice(first_names)
-    ln = random.choice(last_names)
+    fn, ln = pick_person()
     city, state, zipcode = random.choice(cities)
     pdf = FPDF()
     pdf.add_page()
@@ -238,13 +254,12 @@ for i in range(2):
         amt = random.uniform(-2000, 5000)
         day = random.randint(1, 28)
         pdf.cell(0, 6, f"  03/{day:02d}  {t:<40s} ${amt:>10,.2f}", new_x="LMARGIN", new_y="NEXT")
-    fname = f"assets/bank_statement_{i+1:02d}_{ln.lower()}.pdf"
+    fname = f"assets/sample_statement_{i+1:02d}.pdf"
     pdf.output(fname)
     docs.append(fname)
 
 # --- 1 W-2 Tax Form (additional identity/income verification) ---
-fn = random.choice(first_names)
-ln = random.choice(last_names)
+fn, ln = pick_person()
 city, state, zipcode = random.choice(cities)
 pdf = FPDF()
 pdf.add_page()
@@ -275,7 +290,7 @@ state_wages = wages
 state_tax = int(state_wages * random.uniform(0.03, 0.09))
 pdf.cell(0, 7, f"Box 16 - State Wages: ${state_wages:,}.00", new_x="LMARGIN", new_y="NEXT")
 pdf.cell(0, 7, f"Box 17 - State Tax: ${state_tax:,}.00", new_x="LMARGIN", new_y="NEXT")
-fname = f"assets/w2_form_01_{ln.lower()}.pdf"
+fname = "assets/sample_tax_w2_01.pdf"
 pdf.output(fname)
 docs.append(fname)
 
