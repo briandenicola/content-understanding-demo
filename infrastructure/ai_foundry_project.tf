@@ -18,30 +18,5 @@ module "project_cus" {
     logs = {
       workspace_id = azurerm_log_analytics_workspace.main.id
     }
-
-    models = [
-      {
-        name    = "gpt-5.4"
-        version = "2026-03-05"
-        format  = "OpenAI"
-      },
-      {
-        name    = "gpt-4.1"
-        version = "2025-04-14"
-        format  = "OpenAI"
-      },
-      {
-        name    = "gpt-4.1-mini"
-        version = "2025-04-14"
-        format  = "OpenAI"
-      },
-      {
-        name     = "text-embedding-3-large"
-        version  = "1"
-        format   = "OpenAI"
-        sku      = "Standard"
-        capacity = 120
-      }
-    ]
   }
 }

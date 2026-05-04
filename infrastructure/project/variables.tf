@@ -11,12 +11,5 @@ variable "foundry_project" {
     logs = object({
       workspace_id = string
     })
-    models = list(object({
-      name     = string
-      version  = string
-      format   = string
-      sku      = optional(string, "GlobalStandard")
-      capacity = optional(number, 250)
-    }))
   })
 }
