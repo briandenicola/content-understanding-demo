@@ -19,6 +19,7 @@ provider "azurerm" {
       prevent_deletion_if_contains_resources = false
     }
   }
+  storage_use_azuread = true
 }
 
 locals {
@@ -49,7 +50,7 @@ resource "azurerm_storage_account" "documents" {
   location                      = azurerm_resource_group.this.location
   account_tier                  = "Standard"
   account_replication_type      = "LRS"
-  shared_access_key_enabled     = true
+  shared_access_key_enabled     = false
 
   blob_properties {
     cors_rule {
