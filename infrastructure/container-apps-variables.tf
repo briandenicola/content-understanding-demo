@@ -7,5 +7,5 @@ variable "cosmos_account_name" {
 variable "github_repo_owner" {
   description = "GitHub repository owner for container image references"
   type        = string
-  default     = "brdenico"
+  default     = "briandenicola"
 }
