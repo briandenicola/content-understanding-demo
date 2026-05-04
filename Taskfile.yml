@@ -15,11 +15,10 @@ tasks:
 
   # === Quick Start ===
   up:
-    desc: Full dev environment setup and launch
+    desc: Creates complete Azure environment for {{.TITLE}}
     cmds:
-      - task: setup
-      - task: build
-      - task: run
+      - task: init
+      - task: apply
 
   # === Setup ===
   setup:
