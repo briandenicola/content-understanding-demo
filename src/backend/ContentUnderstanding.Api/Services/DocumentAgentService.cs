@@ -33,17 +33,22 @@ public class DocumentAgentService
 
         _logger.LogInformation("Processing document with agent: {FileName} ({Size} bytes)", fileName, fileContent.Length);
 
-        // Use the CUS endpoint (hub-level) for AIProjectClient — model deployments live here
-        var endpoint = _configuration["Azure:ContentUnderstandingEndpoint"];
+        // AIProjectClient needs the Foundry services endpoint (services.ai.azure.com)
+        // Model deployments are registered here, not at cognitiveservices.azure.com
+        var endpoint = _configuration["Azure:FoundryProjectEndpoint"];
         if (string.IsNullOrWhiteSpace(endpoint))
-            throw new InvalidOperationException("Azure:ContentUnderstandingEndpoint is not configured. Run 'task up' to deploy infrastructure.");
+            throw new InvalidOperationException("Azure:FoundryProjectEndpoint is not configured. Run 'task up' to deploy infrastructure.");
+
+        // Extract base Foundry URL (strip /api/projects/... path if present)
+        var endpointUri = new Uri(endpoint);
+        var foundryBase = new Uri($"{endpointUri.Scheme}://{endpointUri.Host}/");
 
         var modelDeployment = _configuration["Azure:ModelDeploymentName"] ?? "gpt-5.4";
-        _logger.LogDebug("Using model deployment: {Model} at endpoint: {Endpoint}", modelDeployment, endpoint);
+        _logger.LogDebug("Using model deployment: {Model} at endpoint: {Endpoint}", modelDeployment, foundryBase);
         span?.SetTag("ai.model", modelDeployment);
-        span?.SetTag("ai.endpoint", endpoint);
+        span?.SetTag("ai.endpoint", foundryBase.ToString());
 
-        var projectClient = new AIProjectClient(new Uri(endpoint), _credential);
+        var projectClient = new AIProjectClient(foundryBase, _credential);
 
         var agent = projectClient.AsAIAgent(
             model: modelDeployment,
