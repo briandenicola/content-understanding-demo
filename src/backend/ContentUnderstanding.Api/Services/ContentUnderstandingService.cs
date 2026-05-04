@@ -20,11 +20,11 @@ public class ContentUnderstandingService
     private readonly TokenCredential _credential;
     private readonly ILogger<ContentUnderstandingService> _logger;
 
-    public ContentUnderstandingService(IConfiguration configuration, ILogger<ContentUnderstandingService> logger)
+    public ContentUnderstandingService(IConfiguration configuration, ILogger<ContentUnderstandingService> logger, TokenCredential credential)
     {
         _endpoint = configuration["Azure:ContentUnderstandingEndpoint"]
             ?? throw new InvalidOperationException("Azure:ContentUnderstandingEndpoint is not configured");
-        _credential = new DefaultAzureCredential();
+        _credential = credential;
         _httpClient = new HttpClient();
         _logger = logger;
     }

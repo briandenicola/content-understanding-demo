@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Azure.AI.Projects;
+using Azure.Core;
 using Azure.Identity;
 using ContentUnderstanding.Api.Models;
 
@@ -14,12 +15,14 @@ public class DocumentAgentService
     private static readonly ActivitySource Activity = new("ContentUnderstanding.Api", "1.0.0");
     private readonly IConfiguration _configuration;
     private readonly ContentUnderstandingService _cusService;
+    private readonly TokenCredential _credential;
     private readonly ILogger<DocumentAgentService> _logger;
 
-    public DocumentAgentService(IConfiguration configuration, ContentUnderstandingService cusService, ILogger<DocumentAgentService> logger)
+    public DocumentAgentService(IConfiguration configuration, ContentUnderstandingService cusService, TokenCredential credential, ILogger<DocumentAgentService> logger)
     {
         _configuration = configuration;
         _cusService = cusService;
+        _credential = credential;
         _logger = logger;
     }
 
@@ -40,7 +43,7 @@ public class DocumentAgentService
         span?.SetTag("ai.model", modelDeployment);
         span?.SetTag("ai.endpoint", endpoint);
 
-        var projectClient = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential());
+        var projectClient = new AIProjectClient(new Uri(endpoint), _credential);
 
         var agent = projectClient.AsAIAgent(
             model: modelDeployment,

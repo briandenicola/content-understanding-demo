@@ -89,6 +89,13 @@ builder.Services.AddSingleton<ContentUnderstandingService>();
 builder.Services.AddSingleton<DocumentAgentService>();
 builder.Services.AddSingleton<DocumentProcessingSquad>();
 
+// Entra ID credential chain: Azure CLI → Environment → Managed Identity
+var credential = new ChainedTokenCredential(
+    new AzureCliCredential(),
+    new EnvironmentCredential(),
+    new ManagedIdentityCredential(ManagedIdentityId.SystemAssigned));
+builder.Services.AddSingleton<Azure.Core.TokenCredential>(credential);
+
 var app = builder.Build();
 
 // Log configuration status at startup
@@ -101,6 +108,7 @@ logger.LogInformation("=== Content Understanding Demo ===");
 logger.LogInformation("CUS Endpoint:     {Endpoint}", string.IsNullOrEmpty(cusEndpoint) ? "⚠️  NOT CONFIGURED" : cusEndpoint);
 logger.LogInformation("Foundry Project:  {Endpoint}", string.IsNullOrEmpty(foundryEndpoint) ? "⚠️  NOT CONFIGURED" : foundryEndpoint);
 logger.LogInformation("Storage Account:  {Status}", string.IsNullOrEmpty(storageConn) ? "⚠️  NOT CONFIGURED" : "✅ Configured");
+logger.LogInformation("Auth chain:       AzureCliCredential → EnvironmentCredential → ManagedIdentityCredential");
 
 // Connectivity & RBAC validation at startup
 if (!string.IsNullOrEmpty(foundryEndpoint))
@@ -108,7 +116,6 @@ if (!string.IsNullOrEmpty(foundryEndpoint))
     logger.LogInformation("Verifying connectivity to Foundry Project...");
     try
     {
-        var credential = new DefaultAzureCredential();
         var tokenRequest = new Azure.Core.TokenRequestContext(["https://cognitiveservices.azure.com/.default"]);
         var token = await credential.GetTokenAsync(tokenRequest);
         logger.LogInformation("✅ RBAC token acquired (expires {ExpiresOn})", token.ExpiresOn);
@@ -127,7 +134,7 @@ if (!string.IsNullOrEmpty(foundryEndpoint))
     }
     catch (Azure.Identity.AuthenticationFailedException ex)
     {
-        logger.LogCritical(ex, "❌ RBAC authentication failed. Ensure your identity has 'Cognitive Services User' role on the AI Services resource.");
+        logger.LogCritical(ex, "❌ RBAC authentication failed. Ensure you are logged in with 'az login' and have 'Cognitive Services User' role.");
         throw;
     }
 }
