@@ -7,6 +7,7 @@ public record DocumentAnalysisResult
     public string FileName { get; init; } = string.Empty;
     public DateTime AnalyzedAt { get; init; } = DateTime.UtcNow;
     public double OverallConfidence { get; init; }
+    public string? Markdown { get; init; }
     public List<ExtractedField> Fields { get; init; } = [];
     public string? AgentSummary { get; init; }
 }

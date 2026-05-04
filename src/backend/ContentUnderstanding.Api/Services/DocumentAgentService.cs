@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using Azure.AI.Projects;
 using Azure.Core;
-using Azure.Identity;
 using ContentUnderstanding.Api.Models;
 
 namespace ContentUnderstanding.Api.Services;
@@ -34,9 +33,10 @@ public class DocumentAgentService
 
         _logger.LogInformation("Processing document with agent: {FileName} ({Size} bytes)", fileName, fileContent.Length);
 
-        var endpoint = _configuration["Azure:FoundryProjectEndpoint"];
+        // Use the CUS endpoint (hub-level) for AIProjectClient — model deployments live here
+        var endpoint = _configuration["Azure:ContentUnderstandingEndpoint"];
         if (string.IsNullOrWhiteSpace(endpoint))
-            throw new InvalidOperationException("Azure:FoundryProjectEndpoint is not configured. Run 'task up' to deploy infrastructure.");
+            throw new InvalidOperationException("Azure:ContentUnderstandingEndpoint is not configured. Run 'task up' to deploy infrastructure.");
 
         var modelDeployment = _configuration["Azure:ModelDeploymentName"] ?? "gpt-5.4";
         _logger.LogDebug("Using model deployment: {Model} at endpoint: {Endpoint}", modelDeployment, endpoint);
@@ -50,10 +50,10 @@ public class DocumentAgentService
             name: "DocumentReviewAgent",
             instructions: """
                 You are a banking document review agent. Your job is to:
-                1. Review extracted document fields from Content Understanding Service
-                2. Validate the data quality and completeness for account opening
-                3. Flag any issues or missing required fields
-                4. Provide a clear summary of the document's suitability
+                1. Review extracted document content from Content Understanding Service
+                2. Identify the document type (ID, proof of address, application form, etc.)
+                3. Extract key fields relevant for account opening
+                4. Validate completeness and flag any issues
 
                 Required fields for account opening:
                 - Full name (first + last)
@@ -63,14 +63,15 @@ public class DocumentAgentService
                 - ID expiration date (must not be expired)
 
                 Respond with a JSON object containing:
+                - "documentType": detected type
                 - "summary": brief assessment
-                - "isComplete": boolean
+                - "isComplete": boolean indicating if all required fields are present
+                - "extractedFields": object with key-value pairs of extracted data
                 - "missingFields": array of missing required field names
-                - "flags": array of any concerns
+                - "flags": array of any concerns (expired docs, low confidence, etc.)
                 """);
 
-        // For the demo, we simulate the CUS analysis inline
-        // In production, you'd upload to blob and call CUS first
+        // For now, create a simulated CUS result (until blob upload pipeline is wired)
         var simulatedResult = CreateSimulatedResult(fileName);
         _logger.LogDebug("Simulated CUS extraction: {FieldCount} fields for {DocType}",
             simulatedResult.Fields.Count, simulatedResult.DocumentType);
@@ -93,7 +94,6 @@ public class DocumentAgentService
 
     private static DocumentAnalysisResult CreateSimulatedResult(string fileName)
     {
-        // Simulated extraction for demo purposes when CUS is not yet configured
         return new DocumentAnalysisResult
         {
             DocumentId = Guid.NewGuid().ToString(),
