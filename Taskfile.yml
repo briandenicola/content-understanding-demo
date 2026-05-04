@@ -80,14 +80,14 @@ tasks:
 
   _run:backend:
     internal: true
-    dir: '{{.BACKEND_DIR}}'
     vars:
       CUS_ENDPOINT:
-        sh: terraform -chdir=../../infrastructure output -raw CONTENT_UNDERSTANDING_ENDPOINT 2>/dev/null || echo ""
+        sh: terraform -chdir=./infrastructure output -raw CONTENT_UNDERSTANDING_ENDPOINT 2>/dev/null || echo ""
       STORAGE_CONN:
-        sh: terraform -chdir=../../infrastructure output -raw STORAGE_CONNECTION_STRING 2>/dev/null || echo ""
+        sh: terraform -chdir=./infrastructure output -raw STORAGE_CONNECTION_STRING 2>/dev/null || echo ""
       FOUNDRY_ENDPOINT:
-        sh: terraform -chdir=../../infrastructure output -raw FOUNDRY_PROJECT_ENDPOINT 2>/dev/null || echo ""
+        sh: terraform -chdir=./infrastructure output -raw FOUNDRY_PROJECT_ENDPOINT 2>/dev/null || echo ""
+    dir: '{{.BACKEND_DIR}}'
     env:
       Azure__ContentUnderstandingEndpoint: '{{.CUS_ENDPOINT}}'
       Azure__StorageConnectionString: '{{.STORAGE_CONN}}'
