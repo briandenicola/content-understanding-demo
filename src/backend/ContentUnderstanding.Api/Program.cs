@@ -26,6 +26,17 @@ builder.Services.AddSingleton<DocumentProcessingSquad>();
 
 var app = builder.Build();
 
+// Log configuration status at startup
+var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+var cusEndpoint = app.Configuration["Azure:ContentUnderstandingEndpoint"];
+var foundryEndpoint = app.Configuration["Azure:FoundryProjectEndpoint"];
+var storageConn = app.Configuration["Azure:StorageConnectionString"];
+
+logger.LogInformation("=== Content Understanding Demo ===");
+logger.LogInformation("CUS Endpoint:     {Endpoint}", string.IsNullOrEmpty(cusEndpoint) ? "⚠️  NOT CONFIGURED" : cusEndpoint);
+logger.LogInformation("Foundry Project:  {Endpoint}", string.IsNullOrEmpty(foundryEndpoint) ? "⚠️  NOT CONFIGURED" : foundryEndpoint);
+logger.LogInformation("Storage Account:  {Status}", string.IsNullOrEmpty(storageConn) ? "⚠️  NOT CONFIGURED" : "✅ Configured");
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
