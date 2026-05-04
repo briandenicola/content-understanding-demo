@@ -113,29 +113,16 @@ logger.LogInformation("Auth chain:       AzureCliCredential → EnvironmentCrede
 // Connectivity & RBAC validation at startup
 if (!string.IsNullOrEmpty(foundryEndpoint))
 {
-    logger.LogInformation("Verifying connectivity to Foundry Project...");
+    logger.LogInformation("Verifying Entra ID token acquisition...");
     try
     {
         var tokenRequest = new Azure.Core.TokenRequestContext(["https://cognitiveservices.azure.com/.default"]);
         var token = await credential.GetTokenAsync(tokenRequest);
-        logger.LogInformation("✅ RBAC token acquired (expires {ExpiresOn})", token.ExpiresOn);
-
-        using var http = new HttpClient();
-        http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.Token);
-        var response = await http.GetAsync(foundryEndpoint);
-
-        // 401/403 = auth problem (crash). 404 or other codes = endpoint reachable, API just doesn't serve GET (ok).
-        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized || response.StatusCode == System.Net.HttpStatusCode.Forbidden)
-        {
-            logger.LogCritical("❌ Foundry Project returned HTTP {StatusCode} — RBAC role missing", (int)response.StatusCode);
-            throw new InvalidOperationException($"Foundry Project RBAC check failed: HTTP {(int)response.StatusCode}. Ensure 'Cognitive Services User' role is assigned.");
-        }
-
-        logger.LogInformation("✅ Foundry Project reachable (HTTP {StatusCode})", (int)response.StatusCode);
+        logger.LogInformation("✅ Entra ID token acquired successfully (expires {ExpiresOn})", token.ExpiresOn);
     }
-    catch (Azure.Identity.AuthenticationFailedException ex)
+    catch (Exception ex)
     {
-        logger.LogCritical(ex, "❌ RBAC authentication failed. Ensure you are logged in with 'az login' and have 'Cognitive Services User' role.");
+        logger.LogCritical(ex, "❌ Entra ID token acquisition FAILED: {Message}", ex.Message);
         throw;
     }
 }
