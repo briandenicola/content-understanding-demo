@@ -92,7 +92,7 @@ tasks:
   init:
     desc: Initialize Terraform for {{.TITLE}}
     cmds:
-      - terraform -chdir=./{{.INFRA_DIR}} init
+      - terraform -chdir=./{{.INFRA_DIR}} init -upgrade
       - terraform -chdir=./{{.INFRA_DIR}} workspace new {{.REGION}} || true
       - terraform -chdir=./{{.INFRA_DIR}} workspace select {{.REGION}}
     vars:

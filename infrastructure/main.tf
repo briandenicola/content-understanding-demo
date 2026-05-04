@@ -44,11 +44,12 @@ resource "azurerm_resource_group" "this" {
 }
 
 resource "azurerm_storage_account" "documents" {
-  name                     = local.storage_account_name
-  resource_group_name      = azurerm_resource_group.this.name
-  location                 = azurerm_resource_group.this.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
+  name                          = local.storage_account_name
+  resource_group_name           = azurerm_resource_group.this.name
+  location                      = azurerm_resource_group.this.location
+  account_tier                  = "Standard"
+  account_replication_type      = "LRS"
+  shared_access_key_enabled     = true
 
   blob_properties {
     cors_rule {
