@@ -19,7 +19,7 @@ public class DocumentProcessingSquad
     {
         var endpoint = configuration["Azure:FoundryProjectEndpoint"]
             ?? throw new InvalidOperationException("Azure:FoundryProjectEndpoint is not configured");
-        var deploymentName = configuration["Azure:ModelDeploymentName"] ?? "gpt-4o";
+        var deploymentName = configuration["Azure:ModelDeploymentName"] ?? "gpt-4.1";
 
         _chatClient = new AzureOpenAIClient(new Uri(endpoint), new AzureCliCredential())
             .GetChatClient(deploymentName)

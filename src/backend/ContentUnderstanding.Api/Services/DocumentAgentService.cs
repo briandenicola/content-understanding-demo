@@ -44,7 +44,7 @@ public class DocumentAgentService
         var endpointUri = new Uri(endpoint);
         var openAiEndpoint = new Uri($"https://{endpointUri.Host.Replace(".services.ai.azure.com", ".openai.azure.com")}/");
 
-        var modelDeployment = _configuration["Azure:ModelDeploymentName"] ?? "gpt-5.4";
+        var modelDeployment = _configuration["Azure:ModelDeploymentName"] ?? "gpt-4.1";
         _logger.LogDebug("Using model deployment: {Model} at endpoint: {Endpoint}", modelDeployment, openAiEndpoint);
         span?.SetTag("ai.model", modelDeployment);
         span?.SetTag("ai.endpoint", openAiEndpoint.ToString());
