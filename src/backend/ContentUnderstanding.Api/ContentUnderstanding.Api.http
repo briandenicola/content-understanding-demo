@@ -1,0 +1,6 @@
+@ContentUnderstanding.Api_HostAddress = http://localhost:5038
+
+GET {{ContentUnderstanding.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

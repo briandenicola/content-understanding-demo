@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+.pnp/
+
+# Build outputs
+dist/
+bin/
+obj/
+out/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+appsettings.Development.json
+terraform.tfvars
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# IDE
+.vs/
+.vscode/
+*.suo
+*.user
+*.sln.docstates
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
