@@ -57,7 +57,7 @@ resource "azurerm_container_app" "backend" {
   template {
     container {
       name   = "backend"
-      image  = "ghcr.io/briandenicola/content-understanding-demo/backend:latest"
+      image  = "mcr.microsoft.com/dotnet/samples:aspnetapp"
       cpu    = 0.5
       memory = "1Gi"
 
