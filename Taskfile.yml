@@ -13,60 +13,73 @@ tasks:
     cmds:
       - task --list
 
-  # === Quick Start ===
   up:
     desc: Creates complete Azure environment for {{.TITLE}}
     cmds:
-      - task: init
+      - task: _init
       - task: apply
 
-  # === Setup ===
-  setup:
-    desc: Install all dependencies (backend + frontend)
+  apply:
+    desc: Apply Terraform infrastructure
     cmds:
-      - task: setup:backend
-      - task: setup:frontend
+      - terraform -chdir=./{{.INFRA_DIR}} apply -auto-approve -compact-warnings
+        -var "region={{.REGION}}"
+    vars:
+      REGION: '{{default .DEFAULT_REGION .CLI_ARGS}}'
 
-  setup:backend:
-    desc: Restore .NET packages
-    dir: '{{.BACKEND_DIR}}'
+  down:
+    desc: Destroy all Azure resources and clean Terraform/build files
     cmds:
-      - dotnet restore
+      - terraform -chdir=./{{.INFRA_DIR}} destroy -auto-approve || true
+      - cmd: rm -rf .terraform .terraform.lock.hcl terraform.tfstate.d
+        dir: '{{.INFRA_DIR}}'
+      - dotnet clean {{.BACKEND_DIR}} || true
+      - cmd: rm -rf node_modules dist
+        dir: '{{.FRONTEND_DIR}}'
 
-  setup:frontend:
-    desc: Install frontend npm packages
-    dir: '{{.FRONTEND_DIR}}'
-    cmds:
-      - npm install
-
-  # === Build ===
   build:
-    desc: Build everything
+    desc: Build backend and frontend
     cmds:
-      - task: build:backend
-      - task: build:frontend
+      - task: _setup
+      - dotnet build {{.BACKEND_DIR}}
+      - npm run build --prefix {{.FRONTEND_DIR}}
 
-  build:backend:
-    desc: Build .NET backend
-    dir: '{{.BACKEND_DIR}}'
-    cmds:
-      - dotnet build
-
-  build:frontend:
-    desc: Build Vue frontend
-    dir: '{{.FRONTEND_DIR}}'
-    cmds:
-      - npm run build
-
-  # === Run (local dev) ===
   run:
-    desc: Run backend and frontend concurrently
+    desc: Run backend and frontend locally
     deps:
-      - run:backend
-      - run:frontend
+      - _run:backend
+      - _run:frontend
 
-  run:backend:
-    desc: Run .NET backend with hot reload (uses Terraform outputs)
+  test:
+    desc: Run all tests
+    cmds:
+      - dotnet test src/backend
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - dotnet clean {{.BACKEND_DIR}}
+      - cmd: rm -rf node_modules dist
+        dir: '{{.FRONTEND_DIR}}'
+
+  # === Internal tasks ===
+  _init:
+    internal: true
+    cmds:
+      - terraform -chdir=./{{.INFRA_DIR}} init -upgrade
+      - terraform -chdir=./{{.INFRA_DIR}} workspace new {{.REGION}} || true
+      - terraform -chdir=./{{.INFRA_DIR}} workspace select {{.REGION}}
+    vars:
+      REGION: '{{default .DEFAULT_REGION .CLI_ARGS}}'
+
+  _setup:
+    internal: true
+    cmds:
+      - dotnet restore {{.BACKEND_DIR}}
+      - npm install --prefix {{.FRONTEND_DIR}}
+
+  _run:backend:
+    internal: true
     dir: '{{.BACKEND_DIR}}'
     vars:
       CUS_ENDPOINT:
@@ -82,100 +95,8 @@ tasks:
     cmds:
       - dotnet watch run
 
-  run:frontend:
-    desc: Run Vue dev server
+  _run:frontend:
+    internal: true
     dir: '{{.FRONTEND_DIR}}'
     cmds:
       - npm run dev
-
-  # === Infrastructure ===
-  init:
-    desc: Initialize Terraform for {{.TITLE}}
-    cmds:
-      - terraform -chdir=./{{.INFRA_DIR}} init -upgrade
-      - terraform -chdir=./{{.INFRA_DIR}} workspace new {{.REGION}} || true
-      - terraform -chdir=./{{.INFRA_DIR}} workspace select {{.REGION}}
-    vars:
-      REGION: '{{default .DEFAULT_REGION .CLI_ARGS}}'
-
-  apply:
-    desc: Apply Terraform infrastructure for {{.TITLE}}
-    cmds:
-      - terraform -chdir=./{{.INFRA_DIR}} apply -auto-approve -compact-warnings
-        -var "region={{.REGION}}"
-    vars:
-      REGION: '{{default .DEFAULT_REGION .CLI_ARGS}}'
-
-  output:
-    desc: Show Terraform outputs for {{.TITLE}}
-    cmds:
-      - terraform -chdir=./{{.INFRA_DIR}} output
-
-  down:
-    desc: Destroy all Azure resources
-    cmds:
-      - terraform -chdir=./{{.INFRA_DIR}} destroy -auto-approve
-
-  # === Docker ===
-  docker:build:
-    desc: Build backend Docker image
-    dir: '{{.BACKEND_DIR}}'
-    cmds:
-      - docker build -t content-understanding-api:local .
-
-  docker:run:
-    desc: Run backend in Docker (uses Terraform outputs)
-    vars:
-      CUS_ENDPOINT:
-        sh: terraform -chdir=./{{.INFRA_DIR}} output -raw CONTENT_UNDERSTANDING_ENDPOINT 2>/dev/null || echo ""
-      STORAGE_CONN:
-        sh: terraform -chdir=./{{.INFRA_DIR}} output -raw STORAGE_CONNECTION_STRING 2>/dev/null || echo ""
-    cmds:
-      - docker run --rm -p 8080:8080
-        -e Azure__ContentUnderstandingEndpoint={{.CUS_ENDPOINT}}
-        -e Azure__StorageConnectionString={{.STORAGE_CONN}}
-        content-understanding-api:local
-
-  # === Quality ===
-  lint:
-    desc: Run linting on all projects
-    cmds:
-      - task: lint:backend
-      - task: lint:frontend
-
-  lint:backend:
-    desc: Run .NET format check
-    dir: '{{.BACKEND_DIR}}'
-    cmds:
-      - dotnet format --verify-no-changes
-
-  lint:frontend:
-    desc: Run frontend type check
-    dir: '{{.FRONTEND_DIR}}'
-    cmds:
-      - npx vue-tsc --noEmit
-
-  test:
-    desc: Run all tests
-    cmds:
-      - task: test:backend
-
-  test:backend:
-    desc: Run .NET tests
-    dir: src/backend
-    cmds:
-      - dotnet test
-
-  # === Utilities ===
-  clean:
-    desc: Clean build artifacts
-    cmds:
-      - cmd: dotnet clean
-        dir: '{{.BACKEND_DIR}}'
-      - cmd: rm -rf node_modules dist
-        dir: '{{.FRONTEND_DIR}}'
-
-  az:login:
-    desc: Login to Azure CLI
-    cmds:
-      - az login
