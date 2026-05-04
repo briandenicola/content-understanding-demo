@@ -1,0 +1,164 @@
+version: '3'
+
+vars:
+  BACKEND_DIR: src/backend/ContentUnderstanding.Api
+  FRONTEND_DIR: src/frontend
+  INFRA_DIR: infrastructure
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  # === Setup ===
+  setup:
+    desc: Install all dependencies (backend + frontend)
+    cmds:
+      - task: setup:backend
+      - task: setup:frontend
+
+  setup:backend:
+    desc: Restore .NET packages
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - dotnet restore
+
+  setup:frontend:
+    desc: Install frontend npm packages
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npm install
+
+  # === Build ===
+  build:
+    desc: Build everything
+    cmds:
+      - task: build:backend
+      - task: build:frontend
+
+  build:backend:
+    desc: Build .NET backend
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - dotnet build
+
+  build:frontend:
+    desc: Build Vue frontend
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npm run build
+
+  # === Run (local dev) ===
+  run:
+    desc: Run backend and frontend concurrently
+    deps:
+      - run:backend
+      - run:frontend
+
+  run:backend:
+    desc: Run .NET backend with hot reload
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - dotnet watch run
+
+  run:frontend:
+    desc: Run Vue dev server
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npm run dev
+
+  # === Infrastructure ===
+  infra:init:
+    desc: Initialize Terraform
+    dir: '{{.INFRA_DIR}}'
+    cmds:
+      - terraform init
+
+  infra:plan:
+    desc: Plan Terraform changes
+    dir: '{{.INFRA_DIR}}'
+    cmds:
+      - terraform plan
+
+  infra:apply:
+    desc: Apply Terraform infrastructure
+    dir: '{{.INFRA_DIR}}'
+    cmds:
+      - terraform apply
+
+  infra:destroy:
+    desc: Destroy Terraform infrastructure
+    dir: '{{.INFRA_DIR}}'
+    cmds:
+      - terraform destroy
+
+  # === Docker ===
+  docker:build:
+    desc: Build backend Docker image
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - docker build -t content-understanding-api:local .
+
+  docker:run:
+    desc: Run backend in Docker
+    cmds:
+      - docker run --rm -p 8080:8080 --env-file .env content-understanding-api:local
+
+  # === Quality ===
+  lint:
+    desc: Run linting on all projects
+    cmds:
+      - task: lint:backend
+      - task: lint:frontend
+
+  lint:backend:
+    desc: Run .NET format check
+    dir: '{{.BACKEND_DIR}}'
+    cmds:
+      - dotnet format --verify-no-changes
+
+  lint:frontend:
+    desc: Run frontend type check
+    dir: '{{.FRONTEND_DIR}}'
+    cmds:
+      - npx vue-tsc --noEmit
+
+  test:
+    desc: Run all tests
+    cmds:
+      - task: test:backend
+
+  test:backend:
+    desc: Run .NET tests
+    dir: src/backend
+    cmds:
+      - dotnet test
+
+  # === Utilities ===
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - cmd: dotnet clean
+        dir: '{{.BACKEND_DIR}}'
+      - cmd: rm -rf node_modules dist
+        dir: '{{.FRONTEND_DIR}}'
+
+  az:login:
+    desc: Login to Azure CLI
+    cmds:
+      - az login
+
+  env:template:
+    desc: Create .env template file
+    cmds:
+      - |
+        cat <<EOF > .env
+        Azure__ContentUnderstandingEndpoint=https://your-endpoint.cognitiveservices.azure.com/
+        Azure__ContentUnderstandingKey=your-key-here
+        Azure__StorageConnectionString=your-connection-string
+        Azure__FoundryProjectEndpoint=https://your-project.services.ai.azure.com/
+        Azure__ModelDeploymentName=gpt-4o
+        EOF
+    status:
+      - test -f .env
