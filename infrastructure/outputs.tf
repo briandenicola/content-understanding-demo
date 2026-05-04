@@ -1,6 +1,6 @@
 output "cognitive_endpoint" {
   description = "Azure AI Services endpoint URL"
-  value       = azurerm_cognitive_account.content_understanding.endpoint
+  value       = azapi_resource.content_understanding.output.properties.endpoint
 }
 
 output "storage_account_name" {
@@ -15,7 +15,7 @@ output "resource_name" {
 
 output "CONTENT_UNDERSTANDING_ENDPOINT" {
   description = "CUS endpoint for app consumption"
-  value       = azurerm_cognitive_account.content_understanding.endpoint
+  value       = azapi_resource.content_understanding.output.properties.endpoint
 }
 
 output "STORAGE_CONNECTION_STRING" {

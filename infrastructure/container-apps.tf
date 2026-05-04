@@ -63,7 +63,7 @@ resource "azurerm_container_app" "backend" {
 
       env {
         name  = "Azure__ContentUnderstandingEndpoint"
-        value = azurerm_cognitive_account.content_understanding.endpoint
+        value = azapi_resource.content_understanding.output.properties.endpoint
       }
 
       env {

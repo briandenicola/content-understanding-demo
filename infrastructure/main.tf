@@ -1,16 +1,24 @@
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.0"
 
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.100"
+      version = "~> 4"
+    }
+    azapi = {
+      source  = "Azure/azapi"
+      version = "~> 2"
     }
   }
 }
 
 provider "azurerm" {
-  features {}
+  features {
+    resource_group {
+      prevent_deletion_if_contains_resources = false
+    }
+  }
 }
 
 locals {
@@ -54,31 +62,51 @@ resource "azurerm_storage_account" "documents" {
 }
 
 resource "azurerm_storage_container" "uploads" {
-  name                  = "document-uploads"
-  storage_account_name  = azurerm_storage_account.documents.name
-  container_access_type = "private"
+  name               = "document-uploads"
+  storage_account_id = azurerm_storage_account.documents.id
 }
 
-resource "azurerm_cognitive_account" "content_understanding" {
-  name                = local.cognitive_account_name
-  location            = azurerm_resource_group.this.location
-  resource_group_name = azurerm_resource_group.this.name
-  kind                = "AIServices"
-  sku_name            = "S0"
+resource "azapi_resource" "content_understanding" {
+  type                      = "Microsoft.CognitiveServices/accounts@2025-10-01-preview"
+  name                      = local.cognitive_account_name
+  parent_id                 = azurerm_resource_group.this.id
+  location                  = azurerm_resource_group.this.location
+  schema_validation_enabled = false
 
-  identity {
-    type = "SystemAssigned"
+  body = {
+    kind = "AIServices"
+    sku = {
+      name = "S0"
+    }
+    identity = {
+      type = "SystemAssigned"
+    }
+    properties = {
+      disableLocalAuth    = true
+      customSubDomainName = local.cognitive_account_name
+    }
   }
+
+  response_export_values = [
+    "properties.endpoint",
+    "identity.principalId"
+  ]
+}
+
+data "azurerm_cognitive_account" "content_understanding" {
+  depends_on          = [azapi_resource.content_understanding]
+  name                = local.cognitive_account_name
+  resource_group_name = azurerm_resource_group.this.name
 }
 
 resource "azurerm_role_assignment" "cognitive_blob_access" {
   scope                = azurerm_storage_account.documents.id
   role_definition_name = "Storage Blob Data Reader"
-  principal_id         = azurerm_cognitive_account.content_understanding.identity[0].principal_id
+  principal_id         = azapi_resource.content_understanding.output.identity.principalId
 }
 
 resource "azurerm_role_assignment" "user_cognitive_access" {
-  scope                = azurerm_cognitive_account.content_understanding.id
+  scope                = azapi_resource.content_understanding.id
   role_definition_name = "Cognitive Services User"
   principal_id         = data.azurerm_client_config.current.object_id
 }
