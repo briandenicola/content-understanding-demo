@@ -21,7 +21,7 @@ module "project_cus" {
 
     models = [{
       name    = "gpt-5.4"
-      version = "2026-02-14"
+      version = "2026-03-05"
       format  = "OpenAI"
     }]
   }
