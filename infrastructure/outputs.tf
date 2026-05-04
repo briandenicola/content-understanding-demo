@@ -23,3 +23,8 @@ output "STORAGE_CONNECTION_STRING" {
   value       = azurerm_storage_account.documents.primary_connection_string
   sensitive   = true
 }
+
+output "FOUNDRY_PROJECT_ENDPOINT" {
+  description = "Foundry project endpoint for Agent Framework"
+  value       = module.project_cus.project_endpoint
+}
