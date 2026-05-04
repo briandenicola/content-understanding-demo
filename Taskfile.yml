@@ -2,7 +2,7 @@ version: '3'
 
 vars:
   TITLE: Content Understanding Demo
-  DEFAULT_REGION: eastus2
+  DEFAULT_REGION: westus
   BACKEND_DIR: src/backend/ContentUnderstanding.Api
   FRONTEND_DIR: src/frontend
   INFRA_DIR: infrastructure

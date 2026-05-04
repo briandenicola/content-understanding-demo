@@ -1,7 +1,7 @@
 variable "region" {
   description = "Azure region to deploy resources"
   type        = string
-  default     = "eastus2"
+  default     = "westus"
 }
 
 variable "tags" {
