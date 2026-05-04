@@ -1,5 +1,6 @@
 using Azure.Identity;
 using Azure.Storage.Blobs;
+using ContentUnderstanding.Api.Agents;
 using ContentUnderstanding.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,6 +22,7 @@ builder.Services.AddSingleton(_ =>
 
 builder.Services.AddSingleton<ContentUnderstandingService>();
 builder.Services.AddSingleton<DocumentAgentService>();
+builder.Services.AddSingleton<DocumentProcessingSquad>();
 
 var app = builder.Build();
 
@@ -70,6 +72,46 @@ app.MapPost("/api/documents/analyze-agent", async (HttpRequest request, Document
     return Results.Ok(result);
 })
 .WithName("AnalyzeWithAgent")
+.DisableAntiforgery();
+
+app.MapPost("/api/documents/squad-process", async (HttpRequest request, DocumentProcessingSquad squad, ContentUnderstandingService cus, BlobServiceClient blobClient) =>
+{
+    var form = await request.ReadFormAsync();
+    var file = form.Files.FirstOrDefault();
+    if (file is null || file.Length == 0)
+        return Results.BadRequest("No file provided");
+
+    var containerClient = blobClient.GetBlobContainerClient("document-uploads");
+    await containerClient.CreateIfNotExistsAsync();
+
+    var blobName = $"{Guid.NewGuid()}/{file.FileName}";
+    var blobClientInstance = containerClient.GetBlobClient(blobName);
+
+    await using var stream = file.OpenReadStream();
+    await blobClientInstance.UploadAsync(stream, overwrite: true);
+
+    // Run CUS extraction first
+    var cusResult = await cus.AnalyzeDocumentAsync(blobClientInstance.Uri.ToString());
+
+    // Feed CUS results into the agent squad pipeline
+    var documentContext = $"""
+        Document: {file.FileName}
+        Type detected by CUS: {cusResult.DocumentType}
+        Overall CUS confidence: {cusResult.OverallConfidence:P0}
+
+        Extracted fields:
+        {string.Join("\n", cusResult.Fields.Select(f => $"- {f.Name} ({f.Category}): \"{f.Value}\" [confidence: {f.Confidence:P0}]"))}
+        """;
+
+    var squadResult = await squad.ProcessAsync(documentContext);
+
+    return Results.Ok(new
+    {
+        cusResult,
+        squadResult
+    });
+})
+.WithName("SquadProcess")
 .DisableAntiforgery();
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }))
