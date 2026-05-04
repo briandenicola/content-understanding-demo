@@ -124,13 +124,14 @@ if (!string.IsNullOrEmpty(foundryEndpoint))
         http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.Token);
         var response = await http.GetAsync(foundryEndpoint);
 
-        if (response.IsSuccessStatusCode)
-            logger.LogInformation("✅ Foundry Project reachable (HTTP {StatusCode})", (int)response.StatusCode);
-        else
+        // 401/403 = auth problem (crash). 404 or other codes = endpoint reachable, API just doesn't serve GET (ok).
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized || response.StatusCode == System.Net.HttpStatusCode.Forbidden)
         {
-            logger.LogCritical("❌ Foundry Project returned HTTP {StatusCode}: {Reason}", (int)response.StatusCode, response.ReasonPhrase);
-            throw new InvalidOperationException($"Foundry Project connectivity check failed: HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+            logger.LogCritical("❌ Foundry Project returned HTTP {StatusCode} — RBAC role missing", (int)response.StatusCode);
+            throw new InvalidOperationException($"Foundry Project RBAC check failed: HTTP {(int)response.StatusCode}. Ensure 'Cognitive Services User' role is assigned.");
         }
+
+        logger.LogInformation("✅ Foundry Project reachable (HTTP {StatusCode})", (int)response.StatusCode);
     }
     catch (Azure.Identity.AuthenticationFailedException ex)
     {
